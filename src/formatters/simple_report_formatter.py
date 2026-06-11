@@ -29,14 +29,14 @@ class WorkReportFormatter:
         self.config = config or {}
         self.logger = logging.getLogger(f"formatter.{name}")
         
-        # 工作报告格式（简化版）
+        # 工作报告格式（简化版，优先呈现人读的工作内容）
         self.report_formats = {
             "daily_work_summary": ReportFormat(
                 name="daily_work_summary",
                 template="daily",
-                sections=["header", "overview", "key_metrics", "top_activities", "key_insights", "key_highlights", "recommendations", "footer"],
+                sections=["header", "content_summary", "project_work", "concrete_work", "key_outputs", "blockers", "recommendations", "overview", "footer"],
                 style={"theme": "compact", "compact": True},
-                max_length=6000
+                max_length=9000
             ),
             "compact_work_report": ReportFormat(
                 name="compact_work_report",
@@ -104,6 +104,16 @@ class WorkReportFormatter:
         """格式化单个报告部分"""
         if section == "header":
             return self._format_header(analysis_results, report_format)
+        elif section == "content_summary":
+            return self._format_content_summary(analysis_results, report_format)
+        elif section == "concrete_work":
+            return self._format_concrete_work(analysis_results, report_format)
+        elif section == "project_work":
+            return self._format_project_work(analysis_results, report_format)
+        elif section == "key_outputs":
+            return self._format_content_key_outputs(analysis_results, report_format)
+        elif section == "blockers":
+            return self._format_blockers(analysis_results, report_format)
         elif section == "overview":
             return self._format_overview(analysis_results, report_format)
         elif section == "key_metrics":
@@ -130,23 +140,116 @@ class WorkReportFormatter:
         else:
             return f"============================================================\n📊 **每日工作分析报告**\n📅 {report_date}\n============================================================"
     
+    def _format_content_summary(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
+        content_summary = analysis_results.get("content_summary", {})
+        summary = content_summary.get("daily_summary", "今日没有收集到可分析的具体工作内容。")
+        return f"🧭 **今日工作摘要**\n----------------------------------------\n{summary}"
+    
+    def _format_project_work(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
+        project_groups = analysis_results.get("content_summary", {}).get("project_groups", [])
+        if not project_groups:
+            return ""
+        text = "🗂️ **按项目看**\n----------------------------------------\n"
+        for group in project_groups[:4]:
+            name = group.get("name", "未识别项目")
+            count = group.get("count", 0)
+            topics = "、".join(group.get("primary_topics", [])[:2]) or "工作记录"
+            text += f"• **{name}**：{count} 项，主要涉及{topics}\n"
+            for item in group.get("items", [])[:2]:
+                title = self._compact_text(item.get("title", "未命名工作"), 58)
+                text += f"  - {title}\n"
+        return text.rstrip()
+
+    def _format_concrete_work(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
+        content_summary = analysis_results.get("content_summary", {})
+        human_summary_items = content_summary.get("human_summary_items", [])
+        activity_groups = content_summary.get("activity_groups", [])
+        if not activity_groups and not human_summary_items:
+            return "📝 **今天主要做了**\n----------------------------------------\n暂无可展示的具体工作事项。"
+        text = "📝 **按主题看**\n----------------------------------------\n"
+        if human_summary_items:
+            for item in human_summary_items[:5]:
+                group = item.get("group", "工作事项")
+                summary = self._compact_text(item.get("summary", ""), 150)
+                text += f"• **{group}**：{summary}\n"
+            return text.rstrip()
+        text += "\n📌 **原始工作记录分组**\n"
+        for index, group in enumerate(activity_groups[:5], 1):
+            group_name = group.get("name", "未分类工作")
+            count = group.get("count", 0)
+            duration = group.get("total_duration_minutes", 0)
+            duration_text = f"，约 {duration / 60:.1f} 小时" if duration else ""
+            text += f"{index}. **{group_name}**（{count} 项{duration_text}）\n"
+            for item in group.get("items", [])[:4]:
+                title = self._compact_text(item.get("title", "未命名工作"), 90)
+                description = self._compact_text(item.get("description", ""), 140)
+                source = item.get("source", "unknown")
+                text += f"   • {title}（来源: {source}）\n"
+                if description and description != title:
+                    text += f"     - {description}\n"
+        return text.rstrip()
+    
+    def _format_content_key_outputs(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
+        outputs = analysis_results.get("content_summary", {}).get("key_outputs", [])
+        if not outputs:
+            return ""
+        text = "✅ **关键产出**\n----------------------------------------\n"
+        for output in outputs[:5]:
+            summary = self._compact_text(output.get("summary") or output.get("title", ""), 90)
+            project = output.get("project") or output.get("source", "unknown")
+            text += f"• {summary}（{project}）\n"
+        return text.rstrip()
+    
+    def _format_blockers(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
+        notes = analysis_results.get("content_summary", {}).get("blockers_or_notes", [])
+        if not notes:
+            return ""
+        text = "⚠️ **需要关注的事项**\n----------------------------------------\n"
+        for note in notes[:4]:
+            title = self._compact_text(note.get("title", ""), 100)
+            source = note.get("source", "unknown")
+            status = note.get("status", "unknown")
+            status_text = "需留意" if status in ("completed", "done") else status
+            text += f"• {title}（来源: {source}，状态: {status_text}）\n"
+        return text.rstrip()
+    
+    def _compact_text(self, value: Any, max_length: int) -> str:
+        text = str(value or "").strip()
+        text = " ".join(text.split())
+        if len(text) > max_length:
+            return text[:max_length - 1] + "…"
+        return text
+    
     def _format_overview(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
-        """格式化工作概览"""
+        """格式化工作概览（读取 summary_statistics 或 overview）"""
         overview = analysis_results.get("overview", {})
-        
-        work_items = overview.get("total_work_items", 0)
-        total_duration = overview.get("total_duration_hours", 0)
-        unique_tools = overview.get("unique_tools", 0)
-        categories = overview.get("unique_categories", 0)
-        
-        return f"""
-📈 **工作概览**
-----------------------------------------
-⏱️  总工作时长: {total_duration:.1f} 小时
-📋 总工作项数: {work_items} 个
-🛠️  使用工具数: {unique_tools} 个
-🏷️  工作分类数: {categories} 个
-"""
+        stats = analysis_results.get("summary_statistics", {})
+        overall = stats.get("overall", overview) if stats else overview
+        averages = stats.get("averages", {}) if stats else {}
+
+        total_items = overall.get("total_work_items", overview.get("total_work_items", 0))
+        total_hours = overall.get("total_duration_hours", overview.get("total_duration_hours", 0))
+        unique_tools = overall.get("unique_tools", overview.get("unique_tools", 0))
+        categories = overall.get("unique_categories", overview.get("unique_categories", 0))
+        completion_rate = overall.get("completion_rate_percent", overview.get("completion_rate_percent", 0))
+        avg_minutes = averages.get("avg_duration_minutes", 0)
+
+        lines = [
+            "📈 **数据概览**",
+            "----------------------------------------",
+            f"📋 总工作项数: {total_items} 个",
+        ]
+        if total_hours:
+            lines.append(f"⏱️ 总工作时长: {float(total_hours):.1f} 小时")
+        if avg_minutes:
+            lines.append(f"⏲️ 平均每段记录: {float(avg_minutes):.0f} 分钟")
+        if completion_rate:
+            lines.append(f"✅ 任务闭环率: {float(completion_rate):.1f}%")
+        if unique_tools:
+            lines.append(f"🛠️ 使用工具数: {unique_tools} 个")
+        if categories:
+            lines.append(f"🏷️ 工作分类数: {categories} 个")
+        return "\n".join(lines)
     
     def _format_key_metrics(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化关键指标"""
@@ -286,28 +389,38 @@ class WorkReportFormatter:
         return text
     
     def _format_recommendations(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
-        """格式化建议（执行摘要用）"""
-        overview = analysis_results.get("overview", {})
-        health_status = analysis_results.get("system_health", {})
+        """格式化后续关注与建议"""
+        stats = analysis_results.get("summary_statistics", {}) or {}
+        overview = stats.get("overall", analysis_results.get("overview", {}))
+        content_summary = analysis_results.get("content_summary", {}) or {}
+        health_status = analysis_results.get("system_health", {}) or {}
         recommendations = []
-        
-        if overview.get("total_work_items", 0) == 0:
-            recommendations.append("📥 建议：检查数据源路径和权限，确保明日能自动采集工作记录")
-        if overview.get("completion_rate_percent", 0) < 80:
+
+        blockers = content_summary.get("blockers_or_notes", [])
+        key_outputs = content_summary.get("key_outputs", [])
+
+        total_items = overview.get("total_work_items", 0)
+        completion_rate = overview.get("completion_rate_percent", 0)
+
+        if total_items == 0:
+            recommendations.append("📥 今日没有可分析的工作记录，建议检查数据源配置与权限")
+        if blockers:
+            top_titles = [self._compact_text(item.get("title", ""), 40) for item in blockers[:2] if item.get("title")]
+            if top_titles:
+                recommendations.append("⚠️ 后续关注：" + "、".join(top_titles))
+        if completion_rate and float(completion_rate) < 70:
             recommendations.append("✅ 建议：明日优先收敛未完成事项，提升任务闭环率")
+        if not key_outputs and total_items > 0:
+            recommendations.append('📝 建议：可在工作记录中多写一句"完成了什么"，便于日报自动提炼')
         if health_status.get("failed_collectors", 0) > 0:
             recommendations.append("🩺 建议：优先修复失败数据源，避免日报遗漏关键信息")
-        
-        recommendations.extend([
-            "📅 建议：保持每日 19:00 自动生成日报，并在飞书中复盘重点事项",
-            "📊 建议：持续沉淀工作记录，后续可扩展周报和趋势分析"
-        ])
-        
-        text = "💡 **明日建议**\n----------------------------------------\n"
+
+        recommendations.append("📅 建议：每日 19:00 自动生成日报，复盘重点事项并为明日列 1-2 项关键目标")
+
+        text = "💡 **后续关注与建议**\n----------------------------------------\n"
         for rec in recommendations[:4]:
             text += f"• {rec}\n"
-        
-        return text
+        return text.rstrip()
     
     def _format_footer(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化报告尾部"""

@@ -7,7 +7,7 @@
 ### 1. Python 环境
 
 ```bash
-cd /Users/xingan/Documents/software/daily_report_system
+cd <project_root>
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -25,7 +25,13 @@ lark-cli --version
 
 ### 3. 配置目标飞书群聊
 
-推荐写入 shell 环境变量或 LaunchAgent 环境变量：
+推荐写入本地忽略配置 `config/local.env`：
+
+```bash
+FEISHU_DEFAULT_CHAT_ID=oc_xxx
+```
+
+也可以写入 shell 环境变量或 LaunchAgent 环境变量：
 
 ```bash
 export FEISHU_DEFAULT_CHAT_ID="oc_xxx"
@@ -34,11 +40,12 @@ export FEISHU_DEFAULT_CHAT_ID="oc_xxx"
 系统也支持：
 
 ```bash
+export FEISHU_DAILY_REPORT_CHAT_ID="oc_xxx"
 export LARK_DEFAULT_CHAT_ID="oc_xxx"
 export DAILY_REPORT_CHAT_ID="oc_xxx"
 ```
 
-也可以手动运行时通过 `--chat-id` 指定。
+手动运行时也可以通过 `--chat-id` 指定。
 
 ## 手动验证
 
@@ -85,35 +92,36 @@ python3 src/main.py --run-daily --env production
 脚本会：
 
 1. 进入项目目录。
-2. 激活 `venv`。
-3. 执行 `python3 src/main.py --run-daily --env production`。
-4. 写入 `logs/cron.log` 和 `logs/cron_error.log`。
+2. 补齐 launchd 环境下的 PATH 和 PYTHONPATH。
+3. 读取本地忽略配置 `config/local.env`。
+4. 激活 `venv`。
+5. 执行 `python3 src/main.py --run-daily --env production`。
+6. 写入 `logs/cron.log` 和 `logs/cron_error.log`。
 
 ## macOS LaunchAgent 定时任务
 
-配置文件：
+模板文件：
 
 ```text
-config/com.xingan.daily_report_system.plist
+config/com.xingan.daily_report_system.plist.template
 ```
 
-### 1. 检查 plist 中的环境变量
+真实文件 `config/com.xingan.daily_report_system.plist` 由安装脚本生成，并已加入 `.gitignore`。
 
-如果不希望依赖 shell 环境变量，可以在 plist 的 `EnvironmentVariables` 中加入：
+### 1. 检查本地环境配置
 
-```xml
-<key>FEISHU_DEFAULT_CHAT_ID</key>
-<string>oc_xxx</string>
+推荐使用 `config/local.env` 保存群聊 ID：
+
+```bash
+FEISHU_DEFAULT_CHAT_ID=oc_xxx
 ```
 
-注意不要把 app secret 写入仓库。当前系统优先使用已授权的 `lark-cli`，通常只需要群聊 ID。
+该文件已被 `.gitignore` 忽略，不会提交到仓库。注意不要把 app secret 写入仓库。当前系统优先使用已授权的 `lark-cli`，通常只需要群聊 ID。
 
 ### 2. 安装 LaunchAgent
 
 ```bash
-cp config/com.xingan.daily_report_system.plist ~/Library/LaunchAgents/
-launchctl unload ~/Library/LaunchAgents/com.xingan.daily_report_system.plist 2>/dev/null || true
-launchctl load ~/Library/LaunchAgents/com.xingan.daily_report_system.plist
+./scripts/install_launch_agent.sh
 ```
 
 ### 3. 立即触发一次
@@ -155,7 +163,7 @@ crontab -e
 加入：
 
 ```cron
-0 19 * * * FEISHU_DEFAULT_CHAT_ID=oc_xxx /Users/xingan/Documents/software/daily_report_system/scripts/run_daily_report.sh
+0 19 * * * FEISHU_DEFAULT_CHAT_ID=oc_xxx /path/to/daily_report_system/scripts/run_daily_report.sh
 ```
 
 ## 质量检查
@@ -171,7 +179,7 @@ python3 -m compileall src tests
 当前基线：
 
 ```text
-8 passed
+19 passed
 ```
 
 ## 数据目录和日志
@@ -192,7 +200,7 @@ logs/launchd_error.log  # LaunchAgent 错误输出
 优先检查：
 
 1. `lark-cli` 是否可用。
-2. `FEISHU_DEFAULT_CHAT_ID` 或 `--chat-id` 是否正确。
+2. `config/local.env` 中的 `FEISHU_DEFAULT_CHAT_ID`、环境变量或 `--chat-id` 是否正确。
 3. 机器人或当前授权身份是否有目标群聊发送权限。
 4. `logs/cron_error.log` 或 `logs/system.log` 中的错误信息。
 

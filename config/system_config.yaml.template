@@ -43,11 +43,11 @@ data_sources:
     collect_today_only: true  # 只收集当天数据
     time_range: "00:00-23:59"  # 时间范围
     
-  # Trae Work CN 配置（待确认后启用）
+  # Trae Work CN 配置
   trae_work_cn:
-    enabled: false
-    path: "请提供Trae Work CN数据路径"
-    # 其他配置待确认
+    enabled: true
+    history_path: "~/Library/Application Support/TRAE SOLO CN/User/History/"
+    # 读取 Trae Work CN / TRAE SOLO CN 本地编辑历史 entries.json
     
   # OpenClaw 配置
   openclaw:
@@ -71,11 +71,17 @@ data_sources:
     session_file_pattern: "*.json"
     exclude_system_messages: true
     
-  # Codex 配置（待确认后启用）
+  # Codex 配置
   codex:
-    enabled: false
-    path: "请提供Codex数据路径"
-    # 其他配置待确认
+    enabled: true
+    db_path: "~/.codex/state_5.sqlite"
+    # 读取 Codex 本地 threads 会话表
+
+  # PilotDeck 配置
+  pilotdeck:
+    enabled: true
+    root_path: "~/.pilotdeck"
+    # 读取项目会话、项目记忆、router stats 和工作区控制库
 
 report:
   # 报告格式配置

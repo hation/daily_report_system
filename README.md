@@ -1,6 +1,6 @@
 # 统一工作记录整理与定时推送系统
 
-用于从 Trae CN、OpenClaw、Hermes 等工作工具中收集每日工作记录，自动清洗分析、生成日报，并推送到飞书群聊。
+用于从 Trae CN、Trae Work CN、Codex、PilotDeck、OpenClaw、Hermes 等工作工具中收集每日工作记录，自动清洗分析、生成日报，并推送到飞书群聊。
 
 ## 当前状态
 
@@ -9,20 +9,22 @@
 - 多源工作记录收集
 - 数据清洗与基础分析
 - Markdown 日报生成
-- 报告本地保存
+- 报告本地保存到 `data/reports/`
 - 基于已授权 `lark-cli` 的飞书真实推送
+- macOS LaunchAgent 每天 19:00 自动执行
 - pytest 自动测试覆盖核心链路
+- 上线前敏感信息保护：本地配置、日志、报告、真实 plist、旧归档脚本默认忽略
 
 最新进度见：[docs/progress.md](docs/progress.md)
 
 ## 核心功能
 
-- 多源数据收集：Trae CN、OpenClaw、Hermes
+- 多源数据收集：Trae CN、Trae Work CN、Codex、PilotDeck、OpenClaw、Hermes
 - 标准工作项模型：统一不同来源的数据结构
-- 日报生成：工作概览、关键指标、主要活动、洞察、系统健康、明日建议
+- 日报生成：今日摘要、按项目看、按主题看、关键产出、后续关注、数据概览
 - 飞书推送：优先使用 `lark-cli`，不强依赖项目内保存 app secret
-- 历史报告：生成结果保存到 `data/reports/backup/`
-- 自动测试：覆盖收集器、报告管理、格式化器和飞书推送器
+- 历史报告：生成结果保存到 `data/reports/`，备份目录为 `data/reports/backup/`
+- 自动测试：覆盖收集器、报告管理、数据分析、格式化器、飞书推送器和调度配置
 
 ## 项目结构
 
@@ -36,12 +38,46 @@ daily_report_system/
 │   ├── managers/                # 报告主链路管理
 │   └── config/                  # 默认配置
 ├── tests/                       # pytest 自动测试
-├── scripts/                     # 正式运行脚本
-├── config/                      # 配置模板和 LaunchAgent 配置
+├── scripts/                     # 正式运行和 LaunchAgent 安装脚本
+├── config/                      # 配置模板和 LaunchAgent 模板
 ├── docs/                        # 项目文档
-├── archive/legacy_scripts/      # 历史实验脚本归档
-├── data/                        # 运行数据目录
-└── logs/                        # 日志目录
+├── data/                        # 运行数据目录，本地产物默认忽略
+└── logs/                        # 日志目录，本地产物默认忽略
+```
+
+## 架构与执行链路
+
+当前 CodeGraph 索引显示正式源码共 39 个 Python 文件。主链路如下：
+
+```text
+src/main.py
+  └── ReportManager
+      ├── CollectorManager
+      │   ├── TraeCNCollector
+      │   ├── TraeWorkCNCollector
+      │   ├── CodexCollector
+      │   ├── PilotDeckCollector
+      │   ├── OpenClawCollector
+      │   └── HermesCollector
+      ├── ProcessorManager
+      │   ├── DataCleaner
+      │   └── DataAnalyzer
+      ├── WorkReportFormatter / SimpleReportFormatter
+      └── FeishuPusher
+          ├── lark-cli 优先发送
+          └── OpenAPI 可选回退
+```
+
+日报执行流程：
+
+```text
+加载配置 → 初始化组件 → 收集多源工作项 → 清洗去重 → 分析项目/主题/产出 → 格式化 Markdown → 保存报告 → 推送飞书
+```
+
+每天 19:00 的自动运行链路：
+
+```text
+macOS LaunchAgent → scripts/run_daily_report.sh → src/main.py --run-daily --env production
 ```
 
 ## 快速开始
@@ -49,7 +85,7 @@ daily_report_system/
 ### 1. 安装依赖
 
 ```bash
-cd /Users/xingan/Documents/software/daily_report_system
+cd <project_root>
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -74,8 +110,15 @@ export FEISHU_DEFAULT_CHAT_ID="oc_xxx"
 也支持以下变量名：
 
 ```bash
+export FEISHU_DAILY_REPORT_CHAT_ID="oc_xxx"
 export LARK_DEFAULT_CHAT_ID="oc_xxx"
 export DAILY_REPORT_CHAT_ID="oc_xxx"
+```
+
+定时脚本会自动读取本地忽略文件 `config/local.env`，可以写入：
+
+```bash
+FEISHU_DEFAULT_CHAT_ID=oc_xxx
 ```
 
 也可以每次运行时通过命令行传入：
@@ -83,6 +126,15 @@ export DAILY_REPORT_CHAT_ID="oc_xxx"
 ```bash
 python3 src/main.py --run-daily --env production --chat-id oc_xxx
 ```
+
+配置模板：
+
+```text
+config/system_config.yaml.template
+config/data_sources.yaml.template
+```
+
+如果需要生成本地配置文件，请复制模板为 `.yaml` 文件；本地 `.yaml` 已被 `.gitignore` 忽略，避免上传真实路径或群聊 ID。
 
 ### 4. 运行测试
 
@@ -95,7 +147,7 @@ python3 -m compileall src tests
 当前基线结果：
 
 ```text
-8 passed
+19 passed
 ```
 
 ## 常用命令
@@ -140,11 +192,32 @@ python3 src/main.py --run-daily --env production
 ./scripts/run_daily_report.sh
 ```
 
-脚本会使用项目虚拟环境，并调用当前正式入口：
+脚本会读取 `config/local.env`，补齐 launchd 环境下的飞书群聊 ID 和 PATH；然后使用项目虚拟环境，并调用当前正式入口：
 
 ```bash
 python3 src/main.py --run-daily --env production
 ```
+
+### 查看或保存配置
+
+```bash
+python3 src/main.py --show-config --env production
+python3 src/main.py --save-config --env production
+python3 src/main.py --run-daily --config config/system_config.yaml --test
+```
+
+主要参数：
+
+| 参数 | 说明 |
+|---|---|
+| `--run-daily` | 生成日报并按配置推送 |
+| `--test` | 测试模式，不真实推送 |
+| `--test-feishu` | 测试飞书连接 |
+| `--env production/development/test` | 选择运行环境 |
+| `--chat-id oc_xxx` | 指定飞书目标群，优先级最高 |
+| `--config path` | 从指定配置文件加载配置 |
+| `--show-config` | 显示当前配置 |
+| `--save-config` | 保存当前配置到 `config/system_config.yaml` |
 
 ## 数据源说明
 
@@ -157,6 +230,43 @@ python3 src/main.py --run-daily --env production
 ```
 
 支持 `.jsonl`、`.json`、`.md`、`.txt`。
+
+### Trae Work CN
+
+默认路径：
+
+```text
+~/Library/Application Support/TRAE SOLO CN/User/History/
+```
+
+支持读取 Trae Work CN / TRAE SOLO CN 的本地编辑历史 `entries.json`，用于识别项目文件编辑活动。
+
+### Codex
+
+默认路径：
+
+```text
+~/.codex/state_5.sqlite
+```
+
+支持读取 Codex 本地 `threads` 表，识别会话标题、首条用户消息、工作目录、模型来源和 token 使用量；会自动过滤模型问答和简单 OK 测试类噪音会话。
+
+### PilotDeck
+
+默认路径：
+
+```text
+~/.pilotdeck
+```
+
+支持读取 PilotDeck 项目会话、项目记忆、路由统计和工作区控制库：
+
+- `projects/*/chats/*.jsonl`
+- `projects/*/memory/MEMORY.md`
+- `router/stats.jsonl`
+- `memory/workspaces/*/control.sqlite`
+
+会自动跳过 `auth.db`、`server-token` 等认证敏感文件。
 
 ### OpenClaw
 
@@ -201,36 +311,73 @@ export FEISHU_VERIFICATION_TOKEN="xxx"
 
 ## 定时任务
 
-macOS LaunchAgent 配置文件：
+macOS LaunchAgent 使用模板生成本地真实配置：
 
 ```text
-config/com.xingan.daily_report_system.plist
+config/com.xingan.daily_report_system.plist.template
+```
+
+安装方式：
+
+```bash
+./scripts/install_launch_agent.sh
 ```
 
 部署方式见：[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
 
+## 上线前安全说明
+
+以下内容默认不会上传：
+
+```text
+config/local.env
+config/*.yaml
+config/com.xingan.daily_report_system.plist
+archive/legacy_scripts/
+data/reports/*
+logs/*
+.trae/
+.codegraph/
+.mypy_cache/
+```
+
+上线仓库只保留模板和安装脚本：
+
+```text
+config/system_config.yaml.template
+config/data_sources.yaml.template
+config/com.xingan.daily_report_system.plist.template
+scripts/install_launch_agent.sh
+```
+
+真实飞书群聊 ID、日志、日报产物和本机 LaunchAgent plist 都应只保留在本地。
+
 ## 报告内容
+
+当前日报模板见：[docs/daily_report_template.md](docs/daily_report_template.md)。
 
 日报当前包含：
 
-1. 工作概览
-2. 关键指标
-3. 主要活动与分布
-4. 关键洞察
-5. 今日工作亮点
-6. 系统健康状态
-7. 明日建议
+1. 今日工作摘要
+2. 按项目看
+3. 按主题看
+4. 关键产出
+5. 需要关注的事项
+6. 后续关注与建议
+7. 数据概览
 8. 报告尾部
+
+后续如果要优化日报内容，请先更新模板文档，再同步修改分析和格式化代码。
 
 ## 历史脚本归档
 
-历史实验脚本已归档到：
+历史实验脚本保留在本地归档目录：
 
 ```text
 archive/legacy_scripts/
 ```
 
-正式入口以 `src/main.py` 和 `scripts/run_daily_report.sh` 为准。
+该目录已加入 `.gitignore`，不会上传到线上仓库。正式入口以 `src/main.py`、`scripts/run_daily_report.sh` 和 `scripts/install_launch_agent.sh` 为准。
 
 ## 已知技术债
 
@@ -240,7 +387,7 @@ archive/legacy_scripts/
 
 ## 后续建议
 
-1. 部署并验证每天 19:00 自动真实推送。
+1. 等待下一次 19:00 自动真实推送并检查日志。
 2. 增加飞书卡片消息格式。
 3. 增强 OpenClaw 数据收集。
-4. 做类型治理和历史片段归档。
+4. 做类型治理和历史片段清理。

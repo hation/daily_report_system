@@ -5,6 +5,9 @@
 
 from .base_collector import BaseCollector, WorkItem
 from .trae_cn_collector import TraeCNCollector
+from .trae_work_cn_collector import TraeWorkCNCollector
+from .codex_collector import CodexCollector
+from .pilotdeck_collector import PilotDeckCollector
 from .openclaw_collector import OpenClawCollector
 from .hermes_collector import HermesCollector
 from .collector_manager import CollectorManager, create_default_collector_manager
@@ -35,6 +38,9 @@ class CollectorFactory:
 
 # 注册收集器到工厂
 CollectorFactory.register('trae-cn', TraeCNCollector)
+CollectorFactory.register('trae-work-cn', TraeWorkCNCollector)
+CollectorFactory.register('codex', CodexCollector)
+CollectorFactory.register('pilotdeck', PilotDeckCollector)
 CollectorFactory.register('openclaw', OpenClawCollector)
 CollectorFactory.register('hermes', HermesCollector)
 
@@ -43,6 +49,9 @@ __all__ = [
     'WorkItem',
     'CollectorFactory',
     'TraeCNCollector',
+    'TraeWorkCNCollector',
+    'CodexCollector',
+    'PilotDeckCollector',
     'OpenClawCollector',
     'HermesCollector',
     'CollectorManager',

@@ -361,6 +361,15 @@ def create_default_collector_manager() -> CollectorManager:
         'trae-cn': {
             'data_path': '~/.trae-cn/memory/projects/'
         },
+        'trae-work-cn': {
+            'history_path': '~/Library/Application Support/TRAE SOLO CN/User/History/'
+        },
+        'codex': {
+            'db_path': '~/.codex/state_5.sqlite'
+        },
+        'pilotdeck': {
+            'root_path': '~/.pilotdeck'
+        },
         'openclaw': {
             'db_path': '~/.openclaw/lcm.db'
         },

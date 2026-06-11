@@ -18,11 +18,65 @@ def test_daily_report_contains_required_sections():
         "priority_analysis": {"distribution": {"high": 1, "medium": 2}},
         "duration_analysis": {"stats": {"total_hours": 2.5, "average_minutes": 50}},
         "key_insights": [{"text": "自动日报链路已可用", "confidence": 0.9}],
+        "content_summary": {
+            "daily_summary": "今日主要完成日报系统报告内容优化。",
+            "human_summary_items": [
+                {
+                    "group": "日报系统与报告优化",
+                    "summary": "优化日报系统与报告展示，共 2 项，重点是优化每日工作分析报告内容；补充内容型日报测试。",
+                    "details": ["优化每日工作分析报告内容", "补充内容型日报测试"],
+                    "count": 2,
+                }
+            ],
+            "project_groups": [
+                {
+                    "name": "daily_report_system",
+                    "count": 2,
+                    "primary_topics": ["日报系统与报告优化"],
+                    "items": [
+                        {"title": "优化每日工作分析报告内容"},
+                        {"title": "补充内容型日报测试"},
+                    ],
+                }
+            ],
+            "activity_groups": [
+                {
+                    "name": "日报系统与报告优化",
+                    "count": 2,
+                    "total_duration_minutes": 90,
+                    "items": [
+                        {
+                            "title": "优化每日工作分析报告内容",
+                            "description": "将日报从统计数量调整为展示今天具体做了哪些工作",
+                            "source": "trae-cn",
+                        },
+                        {
+                            "title": "补充内容型日报测试",
+                            "description": "确保报告中出现具体工作事项和关键产出",
+                            "source": "trae-cn",
+                        },
+                    ],
+                }
+            ],
+            "key_outputs": [
+                {
+                    "title": "日报内容结构完成优化",
+                    "description": "新增今日工作摘要、今日具体工作和关键产出章节",
+                    "source": "trae-cn",
+                }
+            ],
+            "blockers_or_notes": [],
+        },
         "system_health": {"status": "partial", "successful_collectors": 2, "failed_collectors": 1},
     }, "daily_work_summary")
 
-    assert "工作概览" in report
-    assert "主要活动与分布" in report
-    assert "今日工作亮点" in report
-    assert "系统健康状态" in report
-    assert "明日建议" in report
+    assert "今日工作摘要" in report
+    assert "按项目看" in report
+    assert "按主题看" in report
+    assert "daily_report_system" in report
+    assert "优化日报系统与报告展示" in report
+    assert "关键产出" in report
+    assert "日报内容结构完成优化" in report
+    assert "数据概览" in report
+    assert "后续关注与建议" in report
+    assert "总工作项数" in report

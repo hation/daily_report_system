@@ -10,9 +10,10 @@ import json
 import yaml
 import os
 import sys
+from pathlib import Path
 
 # 添加项目路径
-project_root = "/Users/xingan/Documents/software/daily_report_system"
+project_root = str(Path(__file__).resolve().parents[2])
 sys.path.insert(0, os.path.join(project_root, "src"))
 
 from src.collectors import create_default_collector_manager
@@ -92,7 +93,7 @@ class ReportManager:
                 "verification_token": self.config.get("feishu_verification_token", os.getenv("FEISHU_VERIFICATION_TOKEN", "")),
                 "default_chat_id": self.config.get(
                     "feishu_default_chat_id",
-                    os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", "")
+                    os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("FEISHU_DAILY_REPORT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", "")
                 ),
                 "test_mode": self.config.get("test_mode", True),
                 "prefer_lark_cli": self.config.get("prefer_lark_cli", True),
@@ -318,6 +319,7 @@ class ReportManager:
                 "tool_analysis": {"tools": {}, "total_by_tool": {}},
                 "category_analysis": {},
                 "key_insights": [],
+                "content_summary": {"daily_summary": "今日没有收集到可分析的具体工作内容。", "human_summary_items": [], "activity_groups": [], "key_outputs": [], "blockers_or_notes": []},
                 "insights": {"general": []},
                 "summary_statistics": {"overall": {}, "averages": {}, "totals": {}},
                 "priority_analysis": {},

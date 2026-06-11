@@ -128,44 +128,89 @@ hermes:
     min_message_length: 5
 
 trae_work_cn:
-  # 基础配置（待确认）
+  # 基础配置
   name: "Trae Work CN"
-  description: "Trae Work CN 工作记录系统"
-  type: "待确认"
-  enabled: false  # 默认禁用，待确认后启用
+  description: "Trae Work CN / TRAE SOLO CN 本地编辑历史"
+  type: "file_history"
+  enabled: true
   
-  # 待确认的配置项
-  notes: |
-    需要用户提供以下信息：
-    1. 数据存储路径
-    2. 数据格式（JSON/数据库/文件）
-    3. 数据结构（字段名称）
-    4. 时间戳格式
-    
-  # 占位配置（将在确认后更新）
-  path: "请提供Trae Work CN数据路径"
-  data_format: "待确认"
-  fields: {}
+  # 路径配置
+  history_path: "~/Library/Application Support/TRAE SOLO CN/User/History/"
+  file_pattern: "*/entries.json"
+  
+  # 数据解析配置
+  data_structure:
+    resource_field: "resource"
+    entries_field: "entries"
+    timestamp_field: "timestamp"
+    source_field: "source"
+  
+  # 项目名称解析
+  project_name_extraction:
+    from_resource_path: true
+    workspace_marker: "workspace"
+    software_marker: "software"
+  
+  # 过滤配置
+  filters:
+    exclude_user_settings: true
+    exclude_workspace_config: true
 
 codex:
-  # 基础配置（待确认）
+  # 基础配置
   name: "Codex"
-  description: "Codex 代码生成记录"
-  type: "待确认"
-  enabled: false  # 默认禁用，待确认后启用
+  description: "Codex 本地会话线程数据"
+  type: "sqlite"
+  enabled: true
   
-  # 待确认的配置项
-  notes: |
-    需要用户提供以下信息：
-    1. Codex安装路径
-    2. 工作记录存储方式
-    3. 数据格式和结构
-    4. 如何区分每日记录
-    
-  # 占位配置（将在确认后更新）
-  path: "请提供Codex数据路径"
-  data_format: "待确认"
-  fields: {}
+  # 路径配置
+  db_path: "~/.codex/state_5.sqlite"
+  table: "threads"
+  
+  # 数据解析配置
+  data_structure:
+    id_field: "id"
+    title_field: "title"
+    message_field: "first_user_message"
+    cwd_field: "cwd"
+    created_at_field: "created_at"
+    updated_at_field: "updated_at"
+    tokens_field: "tokens_used"
+    model_provider_field: "model_provider"
+    model_field: "model"
+  
+  # 过滤配置
+  filters:
+    archived_only: false
+    exclude_model_questions: true
+    exclude_ok_tests: true
+
+pilotdeck:
+  # 基础配置
+  name: "PilotDeck"
+  description: "PilotDeck 项目会话、项目记忆、路由统计和工作区控制库"
+  type: "mixed"
+  enabled: true
+  
+  # 路径配置
+  root_path: "~/.pilotdeck"
+  projects_path: "~/.pilotdeck/projects"
+  router_stats_path: "~/.pilotdeck/router/stats.jsonl"
+  workspaces_path: "~/.pilotdeck/memory/workspaces"
+  
+  # 数据解析配置
+  data_sources:
+    project_chats: "projects/*/chats/*.jsonl"
+    project_memory: "projects/*/memory/MEMORY.md"
+    router_stats: "router/stats.jsonl"
+    workspace_sessions: "memory/workspaces/*/control.sqlite"
+  
+  # 安全过滤
+  filters:
+    exclude_auth_db: true
+    exclude_server_token: true
+    exclude_model_questions: true
+    exclude_latency_complaints: true
 
 # 通用数据源配置
 common:

@@ -3,7 +3,7 @@
 **版本**: 1.1  
 **最后更新**: 2026-06-10  
 **项目状态**: 实施中  
-**项目目录**: `/Users/xingan/Documents/software/daily_report_system/`
+**项目目录**: `<project_root>/`
 
 ## 🎯 **项目概述**
 
@@ -32,10 +32,15 @@
   - 学习总结（learned字段）
   - 时间戳（message_summary_time字段）
 
-### **2. Trae Work CN**（待确认）
-- **数据位置**：需要用户提供
-- **数据格式**：待确认
-- **状态**：等待用户提供详细信息
+### **2. Trae Work CN**（已确认）
+- **数据位置**：`~/Library/Application Support/TRAE SOLO CN/User/History/`
+- **数据格式**：VS Code/Trae 风格本地编辑历史 `entries.json`
+- **收集内容**：
+  - 编辑文件路径（resource字段）
+  - 本地历史记录（entries字段）
+  - 编辑时间戳（timestamp字段）
+  - 项目名称（从文件路径解析）
+- **状态**：已接入，默认启用
 
 ### **3. OpenClaw**（已确认）
 - **数据位置**：`~/.openclaw/lcm.db`
@@ -55,10 +60,32 @@
   - 系统健康状态（从评估日志解析）
   - 时间戳（session_start字段）
 
-### **5. Codex**（待确认）
-- **数据位置**：需要用户提供
-- **数据格式**：待确认
-- **状态**：等待用户提供详细信息
+### **5. Codex**（已确认）
+- **数据位置**：`~/.codex/state_5.sqlite`
+- **数据格式**：SQLite `threads` 表
+- **收集内容**：
+  - 会话标题（title）
+  - 首条用户消息（first_user_message）
+  - 工作目录（cwd）
+  - 创建和更新时间（created_at / updated_at）
+  - 模型来源和模型名（model_provider / model）
+  - Token 使用量（tokens_used）
+- **状态**：已接入，默认启用
+
+### **6. PilotDeck**（已确认）
+- **数据位置**：`~/.pilotdeck`
+- **数据格式**：混合本地数据
+  - `projects/*/chats/*.jsonl`
+  - `projects/*/memory/MEMORY.md`
+  - `router/stats.jsonl`
+  - `memory/workspaces/*/control.sqlite`
+- **收集内容**：
+  - 项目聊天输入
+  - 项目记忆更新
+  - 模型路由统计
+  - 工作区 l0 会话
+- **安全约束**：不读取 `auth.db`、`server-token` 等认证敏感文件
+- **状态**：已接入，默认启用
 
 ## 🔄 **数据处理需求**
 
@@ -163,7 +190,7 @@
 
 ### **配置文件结构**
 ```yaml
-# /Users/xingan/Documents/software/daily_report_system/config/system_config.yaml
+# <project_root>/config/system_config.yaml
 system:
   name: "每日工作报告系统"
   version: "1.0.0"
@@ -229,11 +256,11 @@ feishu:
 - [ ] 系统测试和验证
 - [ ] 用户文档编写
 
-### **阶段五：Trae Work CN和Codex集成（待信息确认后）**
-- [ ] 调研Trae Work CN数据格式
-- [ ] 调研Codex数据格式
-- [ ] 实现相应收集器
-- [ ] 集成测试
+### **阶段五：Trae Work CN和Codex集成**
+- [x] 调研Trae Work CN数据格式
+- [x] 调研Codex数据格式
+- [x] 实现相应收集器
+- [x] 集成测试
 
 ## 🚀 **当前状态**
 
@@ -302,7 +329,7 @@ feishu:
 
 ### **项目目录结构**
 ```
-/Users/xingan/Documents/software/daily_report_system/
+<project_root>/
 ├── src/                          # 源代码
 ├── tests/                        # 测试文件
 ├── scripts/                      # 可执行脚本
@@ -327,7 +354,7 @@ feishu:
 ## 📝 **更新记录**
 
 ### **2026-06-10 V1.1**
-- 更新项目目录到 `/Users/xingan/Documents/software/daily_report_system/`
+- 更新项目目录到 `<project_root>/`
 - 细化实施计划为5个阶段
 - 明确待确认信息清单
 - 开始阶段一实施

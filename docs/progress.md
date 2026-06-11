@@ -14,7 +14,7 @@ e14c95f test: cover daily report pipeline
 1e438ab feat: stabilize daily report pipeline
 ```
 
-当前工作区状态：干净。
+当前工作区状态：存在未提交的功能改动，主要包括日报模板优化、Trae Work CN / Codex / PilotDeck 数据源接入、飞书真实推送验证和 19 点定时运行完善。
 
 ## 已完成功能
 
@@ -66,6 +66,58 @@ python3 src/main.py --run-daily --env production --chat-id <oc_xxx>
 - 按时间范围过滤记录。
 - 将 JSONL 记忆记录转换为标准 `WorkItem`。
 - 将近期更新的文本/Markdown/JSON 文件转换为文件活动工作项。
+
+#### Trae Work CN
+
+文件：`src/collectors/trae_work_cn_collector.py`
+
+已支持读取：
+
+- `~/Library/Application Support/TRAE SOLO CN/User/History/`
+- `entries.json`
+
+能力：
+
+- 解析 Trae Work CN / TRAE SOLO CN 的本地文件编辑历史。
+- 按时间范围过滤编辑记录。
+- 从 `resource` 文件路径解析项目名。
+- 过滤用户设置和工作区配置等噪音记录。
+
+#### Codex
+
+文件：`src/collectors/codex_collector.py`
+
+已支持读取：
+
+- `~/.codex/state_5.sqlite`
+- `threads` 表
+
+能力：
+
+- 解析 Codex 本地会话线程数据。
+- 按时间范围过滤会话。
+- 读取会话标题、首条用户消息、工作目录、模型信息和 token 使用量。
+- 从 `cwd` 工作目录解析项目名。
+- 过滤模型问答、OK 测试等噪音会话。
+
+#### PilotDeck
+
+文件：`src/collectors/pilotdeck_collector.py`
+
+已支持读取：
+
+- `~/.pilotdeck/projects/*/chats/*.jsonl`
+- `~/.pilotdeck/projects/*/memory/MEMORY.md`
+- `~/.pilotdeck/router/stats.jsonl`
+- `~/.pilotdeck/memory/workspaces/*/control.sqlite`
+
+能力：
+
+- 解析项目聊天输入和 turn 元数据。
+- 解析项目记忆更新。
+- 解析模型路由统计、模型名和 token 使用量。
+- 解析工作区 l0 会话。
+- 跳过 `auth.db`、`server-token` 等认证敏感文件。
 
 #### Hermes
 
@@ -154,20 +206,25 @@ python3 src/main.py --run-daily --env production --chat-id <oc_xxx>
 
 ### 7. 日报内容增强
 
-文件：`src/formatters/simple_report_formatter.py`
+模板文档：`docs/daily_report_template.md`
+
+实现文件：
+
+- `src/processors/data_analyzer.py`
+- `src/formatters/simple_report_formatter.py`
 
 当前日报包含：
 
-- 工作概览
-- 关键指标
-- 主要活动与分布
-- 关键洞察
-- 今日工作亮点
-- 系统健康状态
-- 明日建议
+- 今日工作摘要
+- 按项目看
+- 按主题看
+- 关键产出
+- 需要关注的事项
+- 后续关注与建议
+- 数据概览
 - 报告尾部
 
-已兼容真实分析结果中的不同数据结构，例如 `tool_analysis.tools` 和 `category_analysis.categories` 中的统计对象。
+当前日报优先展示“今天做了什么”，统计数据放在末尾作为辅助信息。后续优化日报内容时，必须先更新 `docs/daily_report_template.md`，再同步修改分析层、格式化层和测试。
 
 ### 8. 飞书推送
 
@@ -201,8 +258,39 @@ export DAILY_REPORT_CHAT_ID="oc_xxx"
 - lark-cli 最小测试消息发送成功。
 - `python3 src/main.py --test-feishu --env production --chat-id <oc_xxx>` 发送成功。
 - `python3 src/main.py --run-daily --env production --chat-id <oc_xxx>` 完整日报发送成功。
+- 最新日报已真实推送到目标飞书群，消息 ID 已记录在本地日志中。
 
-### 9. 自动测试
+### 9. 每天 19:00 自动运行
+
+文件：
+
+- `scripts/run_daily_report.sh`
+- `config/com.xingan.daily_report_system.plist.template`
+- `scripts/install_launch_agent.sh`
+- `config/local.env`（本地忽略配置，不提交）
+
+已完善：
+
+- LaunchAgent 配置固定为每天 19:00 执行 `scripts/run_daily_report.sh`。
+- 定时脚本会补齐 launchd 环境下的 `PATH` 和 `PYTHONPATH`。
+- 定时脚本会读取本地忽略文件 `config/local.env`。
+- 当前本地 `config/local.env` 已保存目标飞书群的 `FEISHU_DEFAULT_CHAT_ID`。
+- `lark-cli` 路径由安装脚本自动发现，并写入本地生成的 plist。
+- 新增调度配置测试，防止 19 点 plist 和脚本入口被误改。
+
+已验证：
+
+- `./scripts/run_daily_report.sh --run-daily --env test --test` 执行成功。
+- 脚本级测试模式已从 `config/local.env` 读取目标飞书群聊 ID。
+- LaunchAgent 已安装/刷新到 `~/Library/LaunchAgents/com.xingan.daily_report_system.plist`。
+- `launchctl list | grep daily_report_system` 可看到 `com.xingan.daily_report_system`。
+
+后续观察：
+
+- 等待下一次 19:00 自动真实推送。
+- 检查 `logs/cron.log`、`logs/cron_error.log`、`logs/launchd.log`、`logs/launchd_error.log`。
+
+### 10. 自动测试
 
 当前测试目录：`tests/`
 
@@ -224,10 +312,10 @@ python3 -m pytest
 结果：
 
 ```text
-8 passed
+19 passed
 ```
 
-### 10. 文档和脚本整理
+### 11. 文档和脚本整理
 
 已完成：
 
@@ -237,7 +325,7 @@ python3 -m pytest
 - 历史实验脚本已归档到 `archive/legacy_scripts/`。
 - 正式入口统一为 `src/main.py` 和 `scripts/run_daily_report.sh`。
 
-### 11. 验证与质量检查
+### 12. 验证与质量检查
 
 已通过：
 

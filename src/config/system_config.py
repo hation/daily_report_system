@@ -5,6 +5,7 @@
 
 import os
 from datetime import datetime
+from pathlib import Path
 
 # 基础配置
 BASE_CONFIG = {
@@ -19,7 +20,7 @@ BASE_CONFIG = {
     
     # 数据源配置
     "data_sources": {
-        "enabled": ["trae-cn", "openclaw", "hermes"],
+        "enabled": ["trae-cn", "trae-work-cn", "codex", "pilotdeck", "openclaw", "hermes"],
         "trae-cn": {
             "name": "Trae CN",
             "data_path": "~/.trae-cn/memory/projects/",
@@ -41,13 +42,21 @@ BASE_CONFIG = {
         },
         "trae-work-cn": {
             "name": "Trae Work CN",
-            "enabled": False,
-            "description": "Trae Work CN 工作数据（待确认格式）"
+            "history_path": "~/Library/Application Support/TRAE SOLO CN/User/History/",
+            "enabled": True,
+            "description": "Trae Work CN 本地文件编辑历史"
         },
         "codex": {
             "name": "Codex",
-            "enabled": False,
-            "description": "Codex 工作数据（待确认格式）"
+            "db_path": "~/.codex/state_5.sqlite",
+            "enabled": True,
+            "description": "Codex 本地会话线程数据"
+        },
+        "pilotdeck": {
+            "name": "PilotDeck",
+            "root_path": "~/.pilotdeck",
+            "enabled": True,
+            "description": "PilotDeck 项目会话、记忆和路由统计"
         }
     },
     
@@ -208,7 +217,7 @@ BASE_CONFIG = {
     
     # 路径配置
     "paths": {
-        "project_root": "/Users/xingan/Documents/software/daily_report_system",
+        "project_root": str(Path(__file__).resolve().parents[2]),
         "data_dir": "./data/",
         "reports_dir": "./data/reports/",
         "logs_dir": "./logs/",
@@ -291,6 +300,7 @@ def _apply_environment_overrides(config):
     feishu["verification_token"] = os.getenv("FEISHU_VERIFICATION_TOKEN", feishu.get("verification_token", ""))
     default_chat_id = (
         os.getenv("FEISHU_DEFAULT_CHAT_ID", "")
+        or os.getenv("FEISHU_DAILY_REPORT_CHAT_ID", "")
         or os.getenv("LARK_DEFAULT_CHAT_ID", "")
         or os.getenv("DAILY_REPORT_CHAT_ID", "")
     )

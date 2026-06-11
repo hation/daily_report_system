@@ -144,7 +144,7 @@ def test_feishu_connection(config, logger):
             "app_secret": feishu.get("app_secret", ""),
             "encrypt_key": feishu.get("encrypt_key", ""),
             "verification_token": feishu.get("verification_token", ""),
-            "default_chat_id": daily_target.get("chat_id", "") or os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", ""),
+            "default_chat_id": daily_target.get("chat_id", "") or os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("FEISHU_DAILY_REPORT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", ""),
             "test_mode": feishu.get("push_config", {}).get("test_mode", False),
             "prefer_lark_cli": feishu.get("push_config", {}).get("prefer_lark_cli", True)
         }

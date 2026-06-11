@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict, Counter
 import statistics
 import json
+import ast
 
 from .base_processor import BaseProcessor, ProcessedWorkItem
 
@@ -59,6 +60,7 @@ class DataAnalyzer(BaseProcessor):
             
             "duration_analysis": self._analyze_durations(cleaned_items),
             "keyword_analysis": self._analyze_keywords(work_items),
+            "content_summary": self._analyze_work_content(work_items, cleaned_items),
             "insights": self._generate_insights(work_items, cleaned_items),
             "summary_statistics": self._generate_summary_statistics(work_items, cleaned_items)
         }
@@ -83,6 +85,7 @@ class DataAnalyzer(BaseProcessor):
             
             "duration_analysis": {"stats": {}, "buckets": {}},
             "keyword_analysis": {"keywords": {}, "top_keywords": []},
+            "content_summary": {"daily_summary": "今日没有收集到可分析的具体工作内容。", "human_summary_items": [], "activity_groups": [], "key_outputs": [], "blockers_or_notes": []},
             "insights": {"general": [], "time_patterns": [], "tool_usage": []},
             "summary_statistics": {"overall": {}, "averages": {}, "totals": {}}
         }
@@ -377,6 +380,365 @@ class DataAnalyzer(BaseProcessor):
             for keyword, count in keyword_counts.most_common(self.top_n_keywords)
         ]
         return {"keywords": dict(keyword_counts), "top_keywords": top_keywords}
+    
+    def _analyze_work_content(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        if not items:
+            return {"daily_summary": "今日没有收集到可分析的具体工作内容。", "human_summary_items": [], "activity_groups": [], "key_outputs": [], "blockers_or_notes": []}
+        normalized_items = []
+        for index, item in enumerate(items):
+            source_processed = work_items[index] if index < len(work_items) else None
+            title = self._clean_content_text(item.get('title') or item.get('summary') or item.get('content') or '')
+            description = self._clean_content_text(item.get('description') or item.get('content') or '')
+            if not title and description:
+                title = description[:80]
+            if not title:
+                continue
+            if self._is_content_noise(title, description):
+                continue
+            source = item.get('tool') or item.get('source') or 'unknown'
+            category = item.get('category') or item.get('source_type') or '工作记录'
+            metadata = item.get('metadata') if isinstance(item.get('metadata'), dict) else {}
+            project = self._infer_project_name(item, metadata)
+            normalized_items.append({
+                "title": title,
+                "description": description,
+                "source": source,
+                "category": category,
+                "project": project,
+                "status": item.get('status', 'unknown'),
+                "priority": item.get('priority', 'medium'),
+                "duration_minutes": float(item.get('duration_minutes', 0) or 0),
+                "start_time": item.get('start_time') or item.get('created_at'),
+                "keywords": source_processed.keywords if source_processed else [],
+                "importance_score": source_processed.importance_score if source_processed else 0.5
+            })
+        activity_groups = self._group_by_activity_topic(normalized_items)
+        project_groups = self._group_by_project(normalized_items)
+        human_summary_items = self._build_human_summary_items(activity_groups)
+        key_outputs = self._extract_key_outputs(normalized_items)
+        blockers_or_notes = self._extract_blockers_or_notes(normalized_items)
+        daily_summary = self._build_daily_summary(activity_groups, key_outputs, blockers_or_notes, project_groups)
+        return {
+            "daily_summary": daily_summary,
+            "human_summary_items": human_summary_items[:8],
+            "activity_groups": activity_groups[:6],
+            "project_groups": project_groups[:5],
+            "key_outputs": key_outputs[:6],
+            "blockers_or_notes": blockers_or_notes[:5]
+        }
+
+    def _group_by_activity_topic(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not items:
+            return []
+        buckets: Dict[str, List[Dict[str, Any]]] = {}
+        topic_order: List[str] = []
+        for item in items:
+            topic = self._pick_activity_topic(item)
+            if topic not in buckets:
+                buckets[topic] = []
+                topic_order.append(topic)
+            buckets[topic].append(item)
+        activity_groups = []
+        for topic in topic_order:
+            group_items = sorted(buckets[topic], key=lambda value: (value.get('importance_score', 0) or 0, value.get('duration_minutes', 0) or 0), reverse=True)
+            activity_groups.append({
+                "name": topic,
+                "count": len(group_items),
+                "total_duration_minutes": round(sum(value.get('duration_minutes', 0) for value in group_items), 2),
+                "items": group_items[:5]
+            })
+        activity_groups.sort(key=lambda group: (group['count'], group['total_duration_minutes']), reverse=True)
+        return activity_groups
+
+    def _group_by_project(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            project = item.get('project') or '未识别项目'
+            buckets.setdefault(project, []).append(item)
+        project_groups = []
+        for project, project_items in buckets.items():
+            sorted_items = sorted(project_items, key=lambda value: (value.get('importance_score', 0) or 0, value.get('duration_minutes', 0) or 0), reverse=True)
+            topics = Counter(self._pick_activity_topic(item) for item in sorted_items)
+            project_groups.append({
+                "name": project,
+                "count": len(sorted_items),
+                "total_duration_minutes": round(sum(value.get('duration_minutes', 0) for value in sorted_items), 2),
+                "primary_topics": [topic for topic, _ in topics.most_common(3)],
+                "items": sorted_items[:4]
+            })
+        project_groups.sort(key=lambda group: (group['count'], group['total_duration_minutes']), reverse=True)
+        return project_groups
+
+    def _infer_project_name(self, item: Dict[str, Any], metadata: Dict[str, Any]) -> str:
+        project = metadata.get('project') or item.get('project') or item.get('workspace')
+        if project:
+            return self._normalize_project_name(project)
+        text = f"{item.get('title', '')} {item.get('description', '')} {metadata.get('file_path', '')}".lower()
+        project_markers = [
+            ("daily_report_system", ["daily_report_system", "日报系统", "每日工作分析报告", "飞书推送", "report_formatter", "data_analyzer"]),
+            ("video_anlalyer", ["video_anlalyer", "video_analyzer", "视频分析"]),
+            ("headroom", ["headroom"]),
+            ("podcast", ["podcast", "播客"]),
+        ]
+        for project_name, markers in project_markers:
+            if any(marker in text for marker in markers):
+                return project_name
+        return "未识别项目"
+
+    def _normalize_project_name(self, value: Any) -> str:
+        project = str(value or '').strip()
+        if not project:
+            return "未识别项目"
+        normalized = project.split('/')[-1] if '/' in project else project
+        lower = normalized.lower()
+        known_projects = {
+            "daily-report-system": "daily_report_system",
+            "daily_report_system": "daily_report_system",
+            "video-anlalyer": "video_anlalyer",
+            "video_anlalyer": "video_anlalyer",
+            "video-analyzer": "video_anlalyer",
+            "headroom": "headroom",
+        }
+        for marker, display_name in known_projects.items():
+            if marker in lower:
+                return display_name
+        if lower.startswith('-users-'):
+            parts = [part for part in normalized.split('-') if part]
+            return parts[-1].replace('-', '_') if parts else "未识别项目"
+        return normalized.replace('-', '_')
+
+    def _pick_activity_topic(self, item: Dict[str, Any]) -> str:
+        text = f"{item.get('title', '')} {item.get('description', '')}".lower()
+        keywords_zh = [w for w in item.get('keywords', []) or [] if any('\u4e00' <= char <= '\u9fff' for char in w)]
+        topic_rules = [
+            ("日报系统与报告优化", ["日报", "report", "daily", "报告", "飞书", "lark", "feishu", "推送", "消息", "推送失败", "飞书消息"]),
+            ("代码开发与问题修复", ["修复", "fix", "实现", "开发", "代码", "test", "测试", "pytest", "lint", "调试", "bug", "重构", "实现", "实现了"]),
+            ("文档与项目整理", ["readme", "文档", "部署", "归档", "archive", "脚本", "script", "整理", "目录", "markdown", "md"]),
+            ("数据源与采集", ["trae", "hermes", "openclaw", "collector", "收集", "采集", "数据源", "数据来源", "记忆"]),
+            ("需求沟通与方案设计", ["需求", "方案", "设计", "讨论", "计划", "优化方向", "思路", "评审"])
+        ]
+        for group_name, keywords in topic_rules:
+            if any(keyword in text for keyword in keywords):
+                return group_name
+        category = str(item.get('category') or item.get('source') or '')
+        category_mapping = {
+            "memory": "记忆与项目上下文",
+            "conversation": "沟通与会话记录",
+            "health_check": "系统健康检查",
+            "file_activity": "项目文件活动",
+            "ai_session": "AI 编程会话",
+            "development": "代码开发与问题修复"
+        }
+        if category in category_mapping:
+            return category_mapping[category]
+        if keywords_zh:
+            best = max(keywords_zh, key=len)
+            return best if len(best) >= 2 else '其他工作'
+        display = category.replace('_', ' ').title() if category and category.isascii() else category
+        return display or '其他工作'
+    
+    def _clean_content_text(self, value: Any) -> str:
+        text = str(value or '').strip()
+        text = ' '.join(text.split())
+        return text[:300]
+    
+    def _is_content_noise(self, title: str, description: str) -> bool:
+        text = f"{title} {description}".lower()
+        noise_markers = [
+            "context compaction",
+            "reference only",
+            "previous summary",
+            "important: you are running as a scheduled cron job",
+            "delivery: your final response",
+            "system-reminder",
+            "knowledge cutoff",
+            "active task user requested",
+            "active task 用户要求"
+        ]
+        if any(marker in text for marker in noise_markers):
+            return True
+        if len(title) <= 10 and any(char.isdigit() for char in title) and "-" in title:
+            return True
+        return False
+    
+    def _infer_activity_group(self, item: Dict[str, Any]) -> str:
+        text = f"{item.get('title', '')} {item.get('description', '')}".lower()
+        rules = [
+            ("日报系统与报告优化", ["日报", "report", "daily", "报告", "飞书", "lark", "feishu", "推送"]),
+            ("代码开发与问题修复", ["修复", "fix", "实现", "开发", "代码", "test", "测试", "pytest", "lint"]),
+            ("文档与项目整理", ["readme", "文档", "部署", "归档", "archive", "脚本", "script"]),
+            ("数据源与采集", ["trae", "hermes", "openclaw", "collector", "收集", "采集", "数据源"]),
+            ("需求沟通与方案设计", ["需求", "方案", "设计", "讨论", "计划", "优化", "有没有", "看看", "继续", "可以"])
+        ]
+        for group_name, keywords in rules:
+            if any(keyword in text for keyword in keywords):
+                return group_name
+        category = str(item.get('category') or item.get('source') or '其他工作')
+        category_mapping = {
+            "memory": "记忆与项目上下文",
+            "conversation": "沟通与会话记录",
+            "health_check": "系统健康检查",
+            "file_activity": "项目文件活动",
+            "ai_session": "AI 编程会话",
+            "development": "代码开发与问题修复"
+        }
+        if category in category_mapping:
+            return category_mapping[category]
+        return category.replace('_', ' ').title() if category.isascii() else category
+    
+    def _build_human_summary_items(self, activity_groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        summary_items = []
+        for group in activity_groups[:6]:
+            group_name = group.get('name', '其他工作')
+            item_summaries = []
+            seen = set()
+            for item in group.get('items', [])[:4]:
+                summary = self._summarize_item_for_human(item)
+                if not summary:
+                    continue
+                dedup_key = summary[:36]
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                item_summaries.append(summary)
+            if item_summaries:
+                details = item_summaries[:2]
+                summary_items.append({
+                    "group": group_name,
+                    "summary": self._merge_group_summary(group_name, details, group.get('count', len(details))),
+                    "details": details,
+                    "count": group.get('count', len(details))
+                })
+        return summary_items
+
+    def _summarize_item_for_human(self, item: Dict[str, Any]) -> str:
+        raw_title = item.get('title', '')
+        title = self._normalize_human_sentence(raw_title)
+        description = self._normalize_human_sentence(item.get('description', ''))
+        if 'trae cn项目文件更新' in title.lower():
+            filename = raw_title.split(':', 1)[-1].strip() if ':' in raw_title else raw_title
+            filename = self._compact_text_for_summary(filename)
+            return f"更新项目上下文文件 {filename}" if filename else "更新项目上下文文件"
+        if 'hermes记忆系统健康检查' in title.lower() or 'hermes' == title.lower():
+            return "检查 Hermes 记忆系统运行状态"
+        if title:
+            return self._compact_sentence(title, 70)
+        return self._compact_sentence(description, 70)
+
+    def _normalize_human_sentence(self, value: Any) -> str:
+        text = self._clean_content_text(value)
+        if not text:
+            return ""
+        if text.startswith('[') and ']' in text:
+            parsed = self._parse_list_like_text(text)
+            if parsed:
+                return '、'.join(parsed[:4])
+        text = text.replace(" | ", "；")
+        text = text.replace("['", "").replace("']", "")
+        text = text.replace("', '", "、")
+        return self._compact_sentence(text, 180)
+
+    def _parse_list_like_text(self, text: str) -> List[str]:
+        try:
+            parsed = ast.literal_eval(text)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except (ValueError, SyntaxError):
+            return []
+        return []
+
+    def _compact_sentence(self, text: str, max_length: int) -> str:
+        text = ' '.join(str(text or '').split())
+        if len(text) > max_length:
+            return text[:max_length - 1] + '…'
+        return text
+
+    def _compact_text_for_summary(self, text: str) -> str:
+        text = ' '.join(str(text or '').split())
+        return text[:60]
+
+    def _merge_group_summary(self, group_name: str, item_summaries: List[str], total_count: int = 0) -> str:
+        cleaned = [self._compact_sentence(s.strip().rstrip('。.'), 64) for s in item_summaries if s and s.strip()]
+        if not cleaned:
+            return ""
+        action_map = {
+            "日报系统与报告优化": "优化日报系统与报告展示",
+            "文档与项目整理": "整理项目文档和上下文资产",
+            "数据源与采集": "维护数据源与采集链路",
+            "代码开发与问题修复": "推进代码开发和问题修复",
+            "需求沟通与方案设计": "梳理需求、方案和后续计划",
+            "系统健康检查": "检查系统健康状态",
+            "记忆与项目上下文": "更新项目记忆与上下文",
+            "项目文件活动": "整理项目文件变更",
+            "沟通与会话记录": "沉淀沟通和会话记录",
+            "AI 编程会话": "使用 AI 编程工具推进问题诊断和开发"
+        }
+        action = action_map.get(group_name, f"处理{group_name}相关工作")
+        count_text = f"，共 {total_count} 项" if total_count and total_count > len(cleaned) else ""
+        details = '；'.join(cleaned[:2])
+        return self._compact_sentence(f"{action}{count_text}，重点是{details}。", 150)
+
+    def _extract_key_outputs(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        outputs = []
+        seen_titles = set()
+        output_keywords = ["完成", "实现", "修复", "提交", "生成", "新增", "更新", "归档", "验证", "通过", "success", "fix", "add", "update", "部署"]
+        for item in items:
+            text = f"{item.get('title', '')} {item.get('description', '')}".lower()
+            if item.get('priority') == 'high' or any(keyword in text for keyword in output_keywords):
+                summary = self._summarize_item_for_human(item)
+                dedup_key = (summary or item.get('title', ''))[:40]
+                if dedup_key in seen_titles:
+                    continue
+                seen_titles.add(dedup_key)
+                outputs.append({
+                    "title": item.get('title', ''),
+                    "summary": self._compact_sentence(summary or item.get('title', ''), 90),
+                    "source": item.get('source', 'unknown'),
+                    "project": item.get('project', '未识别项目'),
+                    "description": self._normalize_human_sentence(item.get('description', ''))[:120]
+                })
+        return outputs
+
+    def _extract_blockers_or_notes(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        notes = []
+        note_keywords = ["失败", "错误", "阻塞", "问题", "无法", "没有", "为空", "failed", "error", "missing", "not found"]
+        seen_titles = set()
+        for item in items:
+            title = self._normalize_human_sentence(item.get('title', ''))
+            description = self._normalize_human_sentence(item.get('description', ''))
+            text = f"{title} {description}".lower()
+            status = item.get('status', 'unknown')
+            is_blocker_keyword = any(keyword in text for keyword in note_keywords)
+            is_incomplete = status not in ('completed', 'done', 'unknown')
+            # 已完成的工作即便标题含"失败"也不再作为 blockers
+            is_done = status in ('completed', 'done')
+            if is_done:
+                continue
+            if is_blocker_keyword or is_incomplete:
+                dedup_key = title[:40]
+                if not dedup_key or dedup_key in seen_titles:
+                    continue
+                seen_titles.add(dedup_key)
+                notes.append({
+                    "title": title,
+                    "source": item.get('source', 'unknown'),
+                    "status": status
+                })
+        return notes
+
+    def _build_daily_summary(self, activity_groups: List[Dict[str, Any]], key_outputs: List[Dict[str, Any]], blockers_or_notes: List[Dict[str, Any]], project_groups: List[Dict[str, Any]] = None) -> str:
+        if not activity_groups:
+            return "今日没有收集到可分析的具体工作内容。"
+        group_names = [group.get('name', '') for group in activity_groups[:3] if group.get('name')]
+        project_groups = project_groups or []
+        recognized_projects = [group.get('name') for group in project_groups if group.get('name') and group.get('name') != '未识别项目']
+        project_text = f"，覆盖 {len(recognized_projects)} 个已识别项目" if recognized_projects else ""
+        summary = f"今日主要围绕{'、'.join(group_names)}展开工作{project_text}。"
+        if key_outputs:
+            summary += f" 形成了 {len(key_outputs)} 项可识别产出。"
+        if blockers_or_notes:
+            summary += f" 另有 {len(blockers_or_notes)} 条事项需要后续关注。"
+        return summary
     
     def _generate_insights(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """生成基础洞察"""

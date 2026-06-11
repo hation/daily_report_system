@@ -44,6 +44,7 @@ coverage.xml
 
 # Environments
 .env
+.env.*
 .venv
 env/
 venv/
@@ -68,7 +69,10 @@ ehthumbs.db
 Thumbs.db
 
 # 项目特定
+.trae/
 .codegraph/
+.mypy_cache/
+archive/legacy_scripts/
 data/cache/*
 data/reports/*
 data/errors/*
@@ -85,7 +89,18 @@ auth_url.txt
 
 # 配置（不包含默认配置）
 config/*.yaml
+config/local.env
+config/*.local.*
+config/com.xingan.daily_report_system.plist
 !config/*.template.yaml
+!config/com.xingan.daily_report_system.plist.template
+
+# 证书和密钥
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # 临时文件
 *.tmp
