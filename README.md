@@ -1,146 +1,246 @@
-# 📊 统一工作记录整理与定时推送系统
+# 统一工作记录整理与定时推送系统
 
-## 🎯 项目简介
+用于从 Trae CN、OpenClaw、Hermes 等工作工具中收集每日工作记录，自动清洗分析、生成日报，并推送到飞书群聊。
 
-这是一个自动化系统，用于从多个工作工具中收集每日工作记录，统一整理后于每晚7点自动推送到飞书。
+## 当前状态
 
-## ✨ 核心功能
+项目已经具备可运行基线：
 
-- **多源数据收集**：从 Trae CN、OpenClaw、Hermes Agent 等工具收集工作记录
-- **智能整理分析**：自动分类、统计、分析工作内容
-- **定时自动推送**：每天19:00自动生成并推送报告
-- **飞书集成**：使用 Hermes 的飞书配置进行推送
-- **历史追溯**：完整保存每日工作报告
+- 多源工作记录收集
+- 数据清洗与基础分析
+- Markdown 日报生成
+- 报告本地保存
+- 基于已授权 `lark-cli` 的飞书真实推送
+- pytest 自动测试覆盖核心链路
 
-## 📁 项目结构
+最新进度见：[docs/progress.md](docs/progress.md)
 
-```
+## 核心功能
+
+- 多源数据收集：Trae CN、OpenClaw、Hermes
+- 标准工作项模型：统一不同来源的数据结构
+- 日报生成：工作概览、关键指标、主要活动、洞察、系统健康、明日建议
+- 飞书推送：优先使用 `lark-cli`，不强依赖项目内保存 app secret
+- 历史报告：生成结果保存到 `data/reports/backup/`
+- 自动测试：覆盖收集器、报告管理、格式化器和飞书推送器
+
+## 项目结构
+
+```text
 daily_report_system/
-├── src/                          # 源代码
-│   ├── config/                   # 配置管理
-│   ├── collectors/               # 数据收集器
-│   ├── processors/               # 数据处理器
-│   ├── formatters/               # 报告格式化器
-│   ├── pushers/                  # 推送器
-│   ├── schedulers/               # 任务调度器
-│   └── utils/                    # 工具函数
-├── tests/                        # 测试文件
-├── scripts/                      # 可执行脚本
-├── config/                       # 运行时配置
-├── data/                         # 数据目录
-├── logs/                         # 系统日志
-└── docs/                         # 文档
+├── src/                         # 正式源码
+│   ├── collectors/              # 数据收集器
+│   ├── processors/              # 数据处理器
+│   ├── formatters/              # 报告格式化器
+│   ├── pushers/                 # 飞书推送器
+│   ├── managers/                # 报告主链路管理
+│   └── config/                  # 默认配置
+├── tests/                       # pytest 自动测试
+├── scripts/                     # 正式运行脚本
+├── config/                      # 配置模板和 LaunchAgent 配置
+├── docs/                        # 项目文档
+├── archive/legacy_scripts/      # 历史实验脚本归档
+├── data/                        # 运行数据目录
+└── logs/                        # 日志目录
 ```
 
-## 🚀 快速开始
+## 快速开始
 
-### 安装依赖
+### 1. 安装依赖
+
 ```bash
 cd /Users/xingan/Documents/software/daily_report_system
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 配置系统
-1. 复制配置文件模板：
+### 2. 确认 lark-cli 已授权
+
 ```bash
-cp config/system_config.yaml.template config/system_config.yaml
+lark-cli --version
 ```
 
-2. 编辑配置文件，设置数据源路径和推送时间
+飞书推送默认优先使用已授权的 `lark-cli`。如果授权失效，请重新执行你的 lark-cli 登录流程。
 
-### 运行测试
+### 3. 配置目标群聊
+
+推荐使用环境变量：
+
 ```bash
-python -m pytest tests/
+export FEISHU_DEFAULT_CHAT_ID="oc_xxx"
 ```
 
-### 手动运行
+也支持以下变量名：
+
 ```bash
-python src/main.py --collect --generate --push
+export LARK_DEFAULT_CHAT_ID="oc_xxx"
+export DAILY_REPORT_CHAT_ID="oc_xxx"
 ```
 
-## ⚙️ 配置说明
+也可以每次运行时通过命令行传入：
 
-### 数据源配置
-系统支持以下数据源：
-- **Trae CN**: `~/.trae-cn/memory/projects/`
-- **OpenClaw**: `~/.openclaw/lcm.db`
-- **Hermes Agent**: `~/.hermes/sessions/` 和 `~/.hermes/memory_evaluation/`
-- **Trae Work CN**: 待确认
-- **Codex**: 待确认
-
-### 飞书配置
-系统使用 Hermes Agent 的飞书配置，无需重复配置。
-
-## 📅 定时任务
-
-系统配置为每天19:00自动运行，使用 macOS LaunchAgent。
-
-### 查看任务状态
 ```bash
-launchctl list | grep daily-report
+python3 src/main.py --run-daily --env production --chat-id oc_xxx
 ```
 
-### 手动控制
-```bash
-# 立即运行
-launchctl start ai.xingan.daily-report
+### 4. 运行测试
 
-# 停止任务
-launchctl stop ai.xingan.daily-report
+```bash
+python3 -m pytest
+python3 -m flake8 src tests
+python3 -m compileall src tests
 ```
 
-## 📊 报告格式
+当前基线结果：
 
-报告包含以下部分：
-1. **统计概览**：工作记录数量、时间分布、系统来源
-2. **项目分布**：各项目工作量占比
-3. **详细记录**：按时间排序的工作内容
-4. **工作亮点**：重要成果和需要注意的问题
-5. **系统健康**：Hermes记忆系统状态
-6. **明日建议**：基于今日工作的建议
+```text
+8 passed
+```
 
-## 🔧 开发指南
+## 常用命令
 
-### 添加新的数据源
-1. 在 `src/collectors/` 中创建新的收集器类
-2. 继承 `BaseCollector` 类
-3. 实现 `collect()` 方法
-4. 在配置文件中启用新数据源
+### 测试模式生成日报
 
-### 添加新的推送渠道
-1. 在 `src/pushers/` 中创建新的推送器类
-2. 继承 `BasePusher` 类
-3. 实现 `send()` 方法
-4. 在配置文件中配置新渠道
+不会真实推送到飞书：
 
-## 📝 文档
+```bash
+python3 src/main.py --run-daily --env test --test
+```
 
-- [需求文档](docs/requirements.md) - 项目需求和设计
-- [用户指南](docs/user_guide.md) - 使用说明
-- [API参考](docs/api_reference.md) - 开发接口说明
-- [故障排除](docs/troubleshooting.md) - 常见问题解决
+### 测试飞书连接
 
-## 🤝 贡献指南
+会向目标群聊发送测试消息：
 
-1. Fork 项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+```bash
+python3 src/main.py --test-feishu --env production --chat-id oc_xxx
+```
 
-## 📄 许可证
+如果已经设置 `FEISHU_DEFAULT_CHAT_ID`：
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
+```bash
+python3 src/main.py --test-feishu --env production
+```
 
-## 📞 支持
+### 真实生成并推送日报
 
-如有问题或建议，请：
-1. 查看 [故障排除指南](docs/troubleshooting.md)
-2. 检查日志文件 `logs/system.log`
-3. 提交 Issue
+```bash
+python3 src/main.py --run-daily --env production --chat-id oc_xxx
+```
 
----
+如果已经设置 `FEISHU_DEFAULT_CHAT_ID`：
 
-**版本**: 1.0.0  
-**最后更新**: 2026-06-10  
-**状态**: 开发中
+```bash
+python3 src/main.py --run-daily --env production
+```
+
+### 通过脚本运行
+
+```bash
+./scripts/run_daily_report.sh
+```
+
+脚本会使用项目虚拟环境，并调用当前正式入口：
+
+```bash
+python3 src/main.py --run-daily --env production
+```
+
+## 数据源说明
+
+### Trae CN
+
+默认路径：
+
+```text
+~/.trae-cn/memory/projects/
+```
+
+支持 `.jsonl`、`.json`、`.md`、`.txt`。
+
+### OpenClaw
+
+默认路径：
+
+```text
+~/.openclaw/lcm.db
+```
+
+支持 `tasks`、`sessions` 和 `messages` 表结构兼容查询。
+
+### Hermes
+
+默认路径：
+
+```text
+~/.hermes/sessions/
+~/.hermes/memory_evaluation/
+```
+
+支持会话 JSON 和记忆系统健康检查日志。
+
+## 飞书推送策略
+
+文件：`src/pushers/feishu_pusher.py`
+
+当前策略：
+
+1. 非测试模式优先调用 `lark-cli im +messages-send`。
+2. 如果 lark-cli 失败，并且配置了 `FEISHU_APP_ID` 与 `FEISHU_APP_SECRET`，再尝试 OpenAPI 回退。
+3. 如果缺少群聊 ID，会返回明确错误。
+4. lark-cli 错误会被整理成可读信息。
+
+可选 OpenAPI 环境变量：
+
+```bash
+export FEISHU_APP_ID="cli_xxx"
+export FEISHU_APP_SECRET="xxx"
+export FEISHU_ENCRYPT_KEY="xxx"
+export FEISHU_VERIFICATION_TOKEN="xxx"
+```
+
+## 定时任务
+
+macOS LaunchAgent 配置文件：
+
+```text
+config/com.xingan.daily_report_system.plist
+```
+
+部署方式见：[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
+## 报告内容
+
+日报当前包含：
+
+1. 工作概览
+2. 关键指标
+3. 主要活动与分布
+4. 关键洞察
+5. 今日工作亮点
+6. 系统健康状态
+7. 明日建议
+8. 报告尾部
+
+## 历史脚本归档
+
+历史实验脚本已归档到：
+
+```text
+archive/legacy_scripts/
+```
+
+正式入口以 `src/main.py` 和 `scripts/run_daily_report.sh` 为准。
+
+## 已知技术债
+
+- `mypy src` 仍有历史类型债务，后续建议单独治理。
+- `*_part2.py` 是历史片段文件，当前保留但不参与运行和 lint。
+- OpenClaw 当前真实数据较少，后续可继续增强表结构适配。
+
+## 后续建议
+
+1. 部署并验证每天 19:00 自动真实推送。
+2. 增加飞书卡片消息格式。
+3. 增强 OpenClaw 数据收集。
+4. 做类型治理和历史片段归档。

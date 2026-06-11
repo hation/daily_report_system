@@ -227,7 +227,17 @@ python3 -m pytest
 8 passed
 ```
 
-### 10. 验证与质量检查
+### 10. 文档和脚本整理
+
+已完成：
+
+- README 已更新为当前真实运行方式。
+- 部署文档已更新为 lark-cli 推送和 LaunchAgent 使用说明。
+- 正式脚本保留为 `scripts/run_daily_report.sh` 和 `scripts/init_system.sh`。
+- 历史实验脚本已归档到 `archive/legacy_scripts/`。
+- 正式入口统一为 `src/main.py` 和 `scripts/run_daily_report.sh`。
+
+### 11. 验证与质量检查
 
 已通过：
 
@@ -311,20 +321,7 @@ OpenClaw 真实库最近 24 小时没有符合条件的用户消息，当前收�
    - 确认 `chat_id` 通过环境变量或配置文件注入。
    - 验证每天 19:00 自动推送。
 
-2. 更新 README
-   - 修正旧命令 `python src/main.py --collect --generate --push`。
-   - 补充当前真实命令：
-     - `--run-daily`
-     - `--test-feishu`
-     - `--chat-id`
-   - 说明 lark-cli 授权和目标群聊配置方式。
-
-3. 整理历史脚本
-   - 区分正式脚本和实验脚本。
-   - 删除或归档不再使用的脚本。
-   - 避免后续维护时误用旧入口。
-
-4. 飞书卡片消息
+2. 飞书卡片消息
    - 当前推送为文本消息。
    - 后续可以扩展为 interactive card，提高群内阅读体验。
 
