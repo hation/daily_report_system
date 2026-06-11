@@ -90,8 +90,13 @@ class ReportManager:
                 "app_secret": self.config.get("feishu_app_secret", os.getenv("FEISHU_APP_SECRET", "")),
                 "encrypt_key": self.config.get("feishu_encrypt_key", os.getenv("FEISHU_ENCRYPT_KEY", "")),
                 "verification_token": self.config.get("feishu_verification_token", os.getenv("FEISHU_VERIFICATION_TOKEN", "")),
-                "default_chat_id": self.config.get("feishu_default_chat_id", os.getenv("FEISHU_DEFAULT_CHAT_ID", "")),
-                "test_mode": self.config.get("test_mode", True)
+                "default_chat_id": self.config.get(
+                    "feishu_default_chat_id",
+                    os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", "")
+                ),
+                "test_mode": self.config.get("test_mode", True),
+                "prefer_lark_cli": self.config.get("prefer_lark_cli", True),
+                "lark_cli_timeout": self.config.get("lark_cli_timeout", 30)
             }
             
             self.feishu_pusher = create_feishu_pusher(feishu_config)

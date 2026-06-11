@@ -8,6 +8,8 @@ import json
 import logging
 import time
 import hashlib
+import subprocess
+import shutil
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import requests
@@ -30,6 +32,9 @@ class FeishuPusher(BasePusher):
         self.verification_token = config.get("verification_token", "")
         self.default_chat_id = config.get("default_chat_id", "")
         self.test_mode = config.get("test_mode", False)
+        self.prefer_lark_cli = config.get("prefer_lark_cli", True)
+        self.lark_cli_timeout = config.get("lark_cli_timeout", 30)
+        self.lark_cli_available = bool(shutil.which("lark-cli"))
         
         # API端点
         self.base_url = "https://open.feishu.cn/open-apis"
@@ -61,7 +66,7 @@ class FeishuPusher(BasePusher):
             
             self.logger.info("获取新的飞书访问令牌")
             
-            url = urljoin(self.base_url, "/auth/v3/app_access_token")
+            url = f"{self.base_url}/auth/v3/app_access_token"
             headers = {
                 "Content-Type": "application/json; charset=utf-8"
             }
@@ -128,8 +133,17 @@ class FeishuPusher(BasePusher):
                 "success": True,
                 "message_id": f"test_{int(time.time())}",
                 "chat_id": chat_id,
-                "content_length": len(content)
+                "content_length": len(content),
+                "test_mode": True
             }
+        
+        if self.prefer_lark_cli and self.lark_cli_available:
+            cli_result = self._send_with_lark_cli(content, chat_id, message_type)
+            if cli_result.get("success"):
+                return cli_result
+            if not (self.app_id and self.app_secret):
+                return cli_result
+            self.logger.warning(f"lark-cli 发送失败，尝试 OpenAPI 回退: {cli_result.get('error')}")
         
         try:
             token = self.get_access_token()
@@ -178,6 +192,76 @@ class FeishuPusher(BasePusher):
         except Exception as e:
             self.logger.error(f"发送飞书消息异常: {e}")
             return {"success": False, "error": str(e)}
+    
+    def _send_with_lark_cli(self, content: str, chat_id: str, message_type: str) -> Dict[str, Any]:
+        """使用 lark-cli 发送消息"""
+        idempotency_key = hashlib.md5(f"{message_type}:{chat_id}:{content}".encode("utf-8")).hexdigest()
+        command = [
+            "lark-cli", "im", "+messages-send",
+            "--chat-id", chat_id,
+            "--text", content,
+            "--idempotency-key", idempotency_key,
+            "--format", "json"
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=self.lark_cli_timeout
+            )
+            if result.returncode != 0:
+                return {
+                    "success": False,
+                    "error": self._compact_cli_error(result.stderr or result.stdout),
+                    "returncode": result.returncode,
+                    "channel": "lark-cli"
+                }
+            try:
+                response = json.loads(result.stdout or "{}")
+            except json.JSONDecodeError:
+                return {
+                    "success": False,
+                    "error": "lark-cli 返回非 JSON 响应",
+                    "output": result.stdout[:500],
+                    "channel": "lark-cli"
+                }
+            if response.get("ok") is False:
+                return {
+                    "success": False,
+                    "error": response.get("error", {}).get("message", "lark-cli 调用失败"),
+                    "response": response,
+                    "channel": "lark-cli"
+                }
+            data = response.get("data", response)
+            message_id = data.get("message_id") or data.get("message", {}).get("message_id")
+            self.logger.info(f"lark-cli 消息发送成功，消息ID: {message_id}")
+            return {
+                "success": True,
+                "message_id": message_id,
+                "chat_id": chat_id,
+                "content_length": len(content),
+                "response": response,
+                "channel": "lark-cli"
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "lark-cli 发送超时", "channel": "lark-cli"}
+        except Exception as e:
+            return {"success": False, "error": str(e), "channel": "lark-cli"}
+    
+    def _compact_cli_error(self, error_text: str) -> str:
+        """压缩 lark-cli 错误输出"""
+        error_text = (error_text or "").strip()
+        if not error_text:
+            return "lark-cli 调用失败"
+        try:
+            error = json.loads(error_text)
+            if isinstance(error, dict):
+                detail = error.get("error", {})
+                return detail.get("message") or detail.get("hint") or error_text[:500]
+        except json.JSONDecodeError:
+            pass
+        return error_text[:500]
     
     def send_streaming_message(self, content: str, chat_id: str = None, 
                               message_type: str = "daily_work_report") -> Dict[str, Any]:
@@ -324,7 +408,7 @@ class FeishuPusher(BasePusher):
         """测试飞书连接"""
         self.logger.info("测试飞书连接")
         
-        if not self.test_mode:
+        if not self.test_mode and not (self.prefer_lark_cli and self.lark_cli_available):
             token = self.get_access_token()
             if not token:
                 return {"success": False, "error": "无法获取访问令牌"}

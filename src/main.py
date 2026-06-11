@@ -73,7 +73,8 @@ def run_daily_report(config, logger, test_mode=False):
             "enable_backup": reporting_config.get("backup_reports", True),
             "backup_path": reporting_config.get("backup_path", "./data/reports/backup/"),
             "max_report_history": reporting_config.get("max_report_history", 30),
-            "test_mode": test_mode or feishu_config.get("push_config", {}).get("test_mode", True)
+            "test_mode": test_mode or feishu_config.get("push_config", {}).get("test_mode", False),
+            "prefer_lark_cli": feishu_config.get("push_config", {}).get("prefer_lark_cli", True)
         }
         
         report_manager = create_report_manager(manager_config)
@@ -143,20 +144,31 @@ def test_feishu_connection(config, logger):
             "app_secret": feishu.get("app_secret", ""),
             "encrypt_key": feishu.get("encrypt_key", ""),
             "verification_token": feishu.get("verification_token", ""),
-            "default_chat_id": daily_target.get("chat_id", ""),
-            "test_mode": feishu.get("push_config", {}).get("test_mode", True)
+            "default_chat_id": daily_target.get("chat_id", "") or os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", ""),
+            "test_mode": feishu.get("push_config", {}).get("test_mode", False),
+            "prefer_lark_cli": feishu.get("push_config", {}).get("prefer_lark_cli", True)
         }
         
         pusher = create_feishu_pusher(feishu_config)
         
-        if not feishu_config["test_mode"]:
+        if feishu_config["test_mode"]:
+            logger.info("✅ 飞书测试模式已启用，跳过真实令牌请求")
+        elif feishu_config.get("prefer_lark_cli", True):
+            test_result = pusher.test_connection()
+            if test_result.get("success"):
+                logger.info("✅ 飞书连接测试成功")
+                if test_result.get("message_id"):
+                    logger.info(f"消息ID: {test_result.get('message_id')}")
+                return True
+            else:
+                logger.error(f"❌ 飞书连接测试失败: {test_result.get('error')}")
+                return False
+        else:
             token = pusher.get_access_token()
             if not token:
                 logger.error("❌ 无法获取飞书访问令牌")
                 return False
             logger.info("✅ 飞书访问令牌获取成功")
-        else:
-            logger.info("✅ 飞书测试模式已启用，跳过真实令牌请求")
         
         # 测试发送消息
         test_content = (
@@ -165,13 +177,15 @@ def test_feishu_connection(config, logger):
             "系统状态: 正常\n"
             "测试时间: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n"
             "版本: " + config["system"]["version"] + "\n"
-            "配置群聊ID: " + daily_target.get("chat_id", "未设置")
+            "配置群聊ID: " + feishu_config.get("default_chat_id", "未设置")
         )
         
+        target = daily_target.copy()
+        target["chat_id"] = target.get("chat_id") or feishu_config.get("default_chat_id", "")
         test_result = pusher.send_message(
             content=test_content,
             message_type="daily_work_report",
-            target=daily_target
+            target=target
         )
         
         if test_result.get("success"):
@@ -232,6 +246,7 @@ def main():
     parser.add_argument("--test-feishu", action="store_true", help="测试飞书连接")
     parser.add_argument("--show-config", action="store_true", help="显示配置信息")
     parser.add_argument("--run-daily", action="store_true", help="运行每日报告")
+    parser.add_argument("--chat-id", help="飞书目标群聊ID，优先级高于配置和环境变量")
     parser.add_argument("--save-config", action="store_true", help="保存配置到文件")
     
     args = parser.parse_args()
@@ -241,6 +256,11 @@ def main():
         config = load_config(args.config)
     else:
         config = get_config(args.env)
+    
+    if args.chat_id:
+        for target in config.get("feishu", {}).get("targets", {}).values():
+            if target.get("enabled"):
+                target["chat_id"] = args.chat_id
     
     # 设置日志
     logger = setup_logging(config)
@@ -269,12 +289,14 @@ def main():
         logger.info("  --test-feishu   测试飞书连接")
         logger.info("  --test          测试模式（不实际推送）")
         logger.info("  --show-config   显示配置信息")
+        logger.info("  --chat-id       指定飞书目标群聊ID")
         logger.info("  --save-config   保存配置到文件")
         logger.info("  --env <env>     运行环境 (production/development/test)")
         logger.info("  --config <path> 指定配置文件")
         logger.info("\n💡 示例:")
         logger.info("  python main.py --run-daily --test")
-        logger.info("  python main.py --test-feishu")
+        logger.info("  python main.py --test-feishu --chat-id oc_xxx")
+        logger.info("  python main.py --run-daily --env production --chat-id oc_xxx")
         logger.info("  python main.py --show-config")
 
 

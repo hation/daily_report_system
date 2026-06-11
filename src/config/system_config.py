@@ -135,7 +135,8 @@ BASE_CONFIG = {
             "max_retries": 3,
             "retry_delay": 2,
             "timeout": 30,
-            "test_mode": False  # 生产环境设为False
+            "test_mode": False,
+            "prefer_lark_cli": True
         },
         
         # 消息模板
@@ -288,7 +289,11 @@ def _apply_environment_overrides(config):
     feishu["app_secret"] = os.getenv("FEISHU_APP_SECRET", feishu.get("app_secret", ""))
     feishu["encrypt_key"] = os.getenv("FEISHU_ENCRYPT_KEY", feishu.get("encrypt_key", ""))
     feishu["verification_token"] = os.getenv("FEISHU_VERIFICATION_TOKEN", feishu.get("verification_token", ""))
-    default_chat_id = os.getenv("FEISHU_DEFAULT_CHAT_ID", "")
+    default_chat_id = (
+        os.getenv("FEISHU_DEFAULT_CHAT_ID", "")
+        or os.getenv("LARK_DEFAULT_CHAT_ID", "")
+        or os.getenv("DAILY_REPORT_CHAT_ID", "")
+    )
     if default_chat_id:
         for target in feishu.get("targets", {}).values():
             if not target.get("chat_id"):
