@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xingan.daily_report_system</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/xingan/Documents/software/daily_report_system/scripts/run_daily_report.sh</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/xingan/Documents/software/daily_report_system</string>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/xingan/Documents/software/daily_report_system/logs/launchd.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/xingan/Documents/software/daily_report_system/logs/launchd_error.log</string>
+    
+    <key>StartCalendarInterval</key>
+    <array>
+        <!-- 每天19:00运行 -->
+        <dict>
+            <key>Hour</key>
+            <integer>19</integer>
+            <key>Minute</key>
+            <integer>0</integer>
+        </dict>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>KeepAlive</key>
+    <false/>
+    
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <key>Nice</key>
+    <integer>1</integer>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PYTHONPATH</key>
+        <string>/Users/xingan/Documents/software/daily_report_system</string>
+    </dict>
+</dict>
+</plist>

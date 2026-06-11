@@ -1,0 +1,191 @@
+# 数据源配置
+# 此文件定义各个数据源的详细配置
+
+trae_cn:
+  # 基础配置
+  name: "Trae CN"
+  description: "Trae CN 记忆系统"
+  type: "file_system"
+  
+  # 路径配置
+  base_path: "~/.trae-cn/memory/projects/"
+  
+  # 文件模式
+  file_pattern: "session_memory_*.jsonl"
+  date_dir_pattern: "YYYYMMDD"  # 日期目录格式
+  
+  # 数据解析配置
+  data_structure:
+    intent_field: "intent"
+    actions_field: "actions"
+    outcome_field: "outcome"
+    learned_field: "learned"
+    time_field: "message_summary_time"
+    
+  # 项目名称解析
+  project_name_extraction:
+    from_path: true  # 从路径提取项目名
+    path_pattern: "-Users-xingan-Documents-software-{project_name}"
+    replace_hyphens: true  # 替换连字符为空格
+    
+  # 时间处理
+  time_parsing:
+    format: "%Y-%m-%d %H:%M:%S"
+    timezone: "Asia/Shanghai"
+    
+  # 过滤配置
+  filters:
+    min_intent_length: 5  # 最小意图长度
+    exclude_keywords: []  # 排除关键词
+    include_keywords: []  # 包含关键词
+
+openclaw:
+  # 基础配置
+  name: "OpenClaw"
+  description: "OpenClaw 对话系统"
+  type: "sqlite"
+  
+  # 数据库配置
+  db_path: "~/.openclaw/lcm.db"
+  
+  # 表结构
+  tables:
+    messages: "messages"
+    conversations: "conversations"
+    
+  # 字段映射
+  fields:
+    id: "conversation_id"
+    role: "role"
+    content: "content"
+    time: "created_at"
+    
+  # 查询配置
+  queries:
+    # 获取当日消息的查询
+    daily_messages: |
+      SELECT m.conversation_id, m.role, m.content, m.created_at
+      FROM messages m
+      JOIN conversations c ON m.conversation_id = c.conversation_id
+      WHERE m.created_at LIKE :date_pattern
+      AND m.role = 'user'
+      AND m.content NOT LIKE '%dream diary%'
+      ORDER BY m.created_at DESC
+      LIMIT :limit
+    
+  # 过滤配置
+  filters:
+    exclude_patterns: 
+      - "%dream diary%"
+      - "%自动生成%"
+      - "%[自动回复]%"
+    min_content_length: 10
+    max_content_length: 1000
+
+hermes:
+  # 基础配置
+  name: "Hermes Agent"
+  description: "Hermes Agent 会话和系统状态"
+  type: "mixed"  # 混合类型（文件+日志）
+  
+  # 会话文件配置
+  sessions:
+    path: "~/.hermes/sessions/"
+    file_pattern: "*.json"
+    
+    # 会话文件解析
+    session_structure:
+      session_id: "session_id"
+      messages: "messages"
+      session_start: "session_start"
+      
+    # 消息字段
+    message_fields:
+      role: "role"
+      content: "content"
+      
+  # 记忆评估配置
+  memory_evaluation:
+    path: "~/.hermes/memory_evaluation/"
+    log_pattern: "daily_check_*.log"
+    
+    # 日志解析配置
+    log_parsing:
+      # 健康度匹配模式
+      health_score_pattern: "整体健康度:\\s*(\\d+)/100"
+      
+      # 正常项匹配模式
+      ok_items_pattern: "### \\[OK\\] 正常项"
+      ok_item_line_pattern: "-\\s*(.+)"
+      
+      # 警告项匹配模式
+      warning_items_pattern: "### \\[WARNING\\] 需要注意"
+      warning_item_line_pattern: "-\\s*(.+)"
+      
+  # 过滤配置
+  filters:
+    exclude_system_prompts: true
+    min_message_length: 5
+
+trae_work_cn:
+  # 基础配置（待确认）
+  name: "Trae Work CN"
+  description: "Trae Work CN 工作记录系统"
+  type: "待确认"
+  enabled: false  # 默认禁用，待确认后启用
+  
+  # 待确认的配置项
+  notes: |
+    需要用户提供以下信息：
+    1. 数据存储路径
+    2. 数据格式（JSON/数据库/文件）
+    3. 数据结构（字段名称）
+    4. 时间戳格式
+    
+  # 占位配置（将在确认后更新）
+  path: "请提供Trae Work CN数据路径"
+  data_format: "待确认"
+  fields: {}
+
+codex:
+  # 基础配置（待确认）
+  name: "Codex"
+  description: "Codex 代码生成记录"
+  type: "待确认"
+  enabled: false  # 默认禁用，待确认后启用
+  
+  # 待确认的配置项
+  notes: |
+    需要用户提供以下信息：
+    1. Codex安装路径
+    2. 工作记录存储方式
+    3. 数据格式和结构
+    4. 如何区分每日记录
+    
+  # 占位配置（将在确认后更新）
+  path: "请提供Codex数据路径"
+  data_format: "待确认"
+  fields: {}
+
+# 通用数据源配置
+common:
+  # 时间处理
+  time_handling:
+    default_timezone: "Asia/Shanghai"
+    input_formats:
+      - "%Y-%m-%d %H:%M:%S"
+      - "%Y%m%d_%H%M%S"
+      - "%Y-%m-%dT%H:%M:%S"
+    output_format: "%Y-%m-%d %H:%M:%S"
+    
+  # 数据验证
+  validation:
+    required_fields: ["content", "time"]
+    time_range_check: true
+    content_sanity_check: true
+    
+  # 错误处理
+  error_handling:
+    max_retries: 3
+    retry_delay: 1  # 秒
+    skip_on_error: false  # 出错时跳过还是停止

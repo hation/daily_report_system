@@ -1,0 +1,11 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203,W293,E501,E722,F401,F541,F811,E402,W292,W291,E128,E301,E302,E305,F841
+exclude =
+    .git,
+    .codegraph,
+    __pycache__,
+    venv,
+    data,
+    logs,
+    *_part2.py

@@ -1,0 +1,193 @@
+# 每日工作报告系统配置
+# 复制此文件为 system_config.yaml 并修改配置
+
+system:
+  # 系统基本信息
+  name: "每日工作报告系统"
+  version: "1.0.0"
+  
+  # 日志配置
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_to_console: true
+  
+  # 运行模式
+  mode: "production"  # development, production, test
+
+schedule:
+  # 推送时间配置
+  push_time: "19:00"  # 每天推送时间 (24小时制)
+  timezone: "Asia/Shanghai"  # 时区
+  
+  # 重试配置
+  retry_times: 3  # 失败重试次数
+  retry_interval: "5m"  # 重试间隔
+  
+  # 周度报告配置
+  weekly_report:
+    enabled: false
+    day: "sunday"  # 周日生成周报
+    time: "20:00"  # 周报生成时间
+
+data_sources:
+  # Trae CN 配置
+  trae_cn:
+    enabled: true
+    path: "~/.trae-cn/memory/projects/"  # Trae CN 数据路径
+    
+    # 包含的项目（为空表示包含所有）
+    include_projects: []
+    # exclude_projects: []  # 排除的项目
+    
+    # 时间过滤
+    collect_today_only: true  # 只收集当天数据
+    time_range: "00:00-23:59"  # 时间范围
+    
+  # Trae Work CN 配置（待确认后启用）
+  trae_work_cn:
+    enabled: false
+    path: "请提供Trae Work CN数据路径"
+    # 其他配置待确认
+    
+  # OpenClaw 配置
+  openclaw:
+    enabled: true
+    db_path: "~/.openclaw/lcm.db"  # OpenClaw 数据库路径
+    
+    # 过滤条件
+    exclude_keywords: ["dream diary", "自动生成", "[自动回复]"]
+    min_content_length: 10  # 最小内容长度
+    
+    # 数据库查询配置
+    query_limit: 100  # 每次查询限制
+    
+  # Hermes Agent 配置
+  hermes:
+    enabled: true
+    sessions_path: "~/.hermes/sessions/"  # 会话文件路径
+    memory_eval_path: "~/.hermes/memory_evaluation/"  # 记忆评估路径
+    
+    # 会话文件过滤
+    session_file_pattern: "*.json"
+    exclude_system_messages: true
+    
+  # Codex 配置（待确认后启用）
+  codex:
+    enabled: false
+    path: "请提供Codex数据路径"
+    # 其他配置待确认
+
+report:
+  # 报告格式配置
+  format: "markdown"  # markdown, text, html
+  detail_level: "standard"  # minimal, standard, detailed
+  
+  # 包含的章节
+  sections:
+    statistics: true  # 统计概览
+    project_distribution: true  # 项目分布
+    timeline: true  # 时间线
+    highlights: true  # 工作亮点
+    system_health: true  # 系统健康
+    recommendations: true  # 明日建议
+    raw_data_references: true  # 原始数据参考
+  
+  # 输出配置
+  output:
+    save_to_file: true
+    file_formats: ["md", "txt"]  # 保存的文件格式
+    keep_days: 30  # 保留天数
+    compress_old: false  # 是否压缩旧文件
+    
+    # 文件命名模板
+    filename_template: "daily_report_{date}_{timestamp}"
+    
+    # 目录配置
+    reports_dir: "data/reports/daily/"  # 报告保存目录
+    backups_dir: "data/backups/"  # 备份目录
+
+feishu:
+  # 飞书推送配置
+  enabled: true
+  use_hermes_config: true  # 使用Hermes的飞书配置
+  
+  # Hermes配置路径（如果use_hermes_config为true）
+  hermes_config_path: "~/.hermes/config.yaml"
+  
+  # 消息配置
+  message:
+    type: "card"  # card, text, post
+    include_attachment: true  # 是否包含附件
+    mention_users: []  # 需要@的用户列表
+    
+    # 卡片消息配置
+    card_title: "📊 每日工作汇总报告 - {date}"
+    card_color: "blue"  # 卡片颜色
+    
+  # 通知配置
+  notification:
+    on_success: true  # 成功时通知
+    on_failure: true  # 失败时通知
+    
+  # Webhook配置（如果use_hermes_config为false）
+  webhook_url: ""  # 飞书Webhook URL
+  secret: ""  # 签名密钥
+
+processing:
+  # 数据处理配置
+  data_cleaning:
+    remove_duplicates: true  # 去重
+    truncate_long_content: true  # 截断长内容
+    max_content_length: 500  # 最大内容长度
+    filter_sensitive_info: true  # 过滤敏感信息
+    
+  # 分类配置
+  classification:
+    auto_classify: true  # 自动分类
+    default_project: "其他项目"  # 默认项目
+    importance_threshold: 0.7  # 重要性阈值
+    
+  # 分析配置
+  analysis:
+    calculate_statistics: true  # 计算统计
+    identify_highlights: true  # 识别亮点
+    generate_recommendations: true  # 生成建议
+
+monitoring:
+  # 监控配置
+  health_check:
+    enabled: true
+    check_interval: "1h"  # 检查间隔
+    
+  # 性能监控
+  performance:
+    track_execution_time: true  # 跟踪执行时间
+    log_slow_operations: true  # 记录慢操作
+    slow_operation_threshold: "10s"  # 慢操作阈值
+    
+  # 错误监控
+  error_tracking:
+    enabled: true
+    max_error_logs: 1000  # 最大错误日志数
+    alert_on_critical: true  # 关键错误报警
+
+backup:
+  # 备份配置
+  enabled: true
+  schedule: "0 2 * * *"  # 每天2点备份 (cron格式)
+  
+  # 备份内容
+  backup_config: true  # 备份配置
+  backup_reports: true  # 备份报告
+  backup_logs: false  # 备份日志
+  
+  # 保留策略
+  keep_backups: 7  # 保留天数
+  compress_backups: true  # 压缩备份
+
+# 开发配置（仅开发模式生效）
+development:
+  debug_mode: false
+  mock_data: false  # 使用模拟数据
+  skip_push: false  # 跳过推送
+  dry_run: false  # 干运行（不保存文件）
