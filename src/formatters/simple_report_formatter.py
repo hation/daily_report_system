@@ -34,9 +34,9 @@ class WorkReportFormatter:
             "daily_work_summary": ReportFormat(
                 name="daily_work_summary",
                 template="daily",
-                sections=["header", "overview", "key_metrics", "key_insights", "footer"],
+                sections=["header", "overview", "key_metrics", "top_activities", "key_insights", "key_highlights", "recommendations", "footer"],
                 style={"theme": "compact", "compact": True},
-                max_length=3000  # 更严格限制
+                max_length=6000
             ),
             "compact_work_report": ReportFormat(
                 name="compact_work_report",
@@ -197,63 +197,114 @@ class WorkReportFormatter:
         """格式化主要活动"""
         tool_analysis = analysis_results.get("tool_analysis", {})
         category_analysis = analysis_results.get("category_analysis", {})
+        priority_analysis = analysis_results.get("priority_analysis", {})
+        duration_analysis = analysis_results.get("duration_analysis", {})
         
-        # 主要工具
-        top_tools = tool_analysis.get("top_tools", [])[:3]
-        # 主要分类
-        top_categories = category_analysis.get("top_categories", [])[:3]
+        top_tools = tool_analysis.get("top_tools") or []
+        if not top_tools and isinstance(tool_analysis.get("tools"), dict):
+            top_tools = []
+            for name, stats in tool_analysis["tools"].items():
+                if isinstance(stats, dict):
+                    count = stats.get("count", 0)
+                    duration = stats.get("total_duration_hours", stats.get("total_duration_minutes", 0) / 60)
+                else:
+                    count = stats
+                    duration = 0
+                top_tools.append({"tool_name": name, "count": count, "total_duration_hours": duration})
+            top_tools = sorted(top_tools, key=lambda item: item.get("count", 0), reverse=True)
+        top_tools = top_tools[:3]
         
-        text = "🎯 **主要活动**\n----------------------------------------\n"
+        top_categories = category_analysis.get("top_categories") or []
+        if not top_categories and isinstance(category_analysis.get("categories"), dict):
+            top_categories = []
+            for name, stats in category_analysis["categories"].items():
+                count = stats.get("count", 0) if isinstance(stats, dict) else stats
+                top_categories.append({"category_name": name, "count": count})
+            top_categories = sorted(top_categories, key=lambda item: item.get("count", 0), reverse=True)
+        top_categories = top_categories[:3]
+        
+        text = "🎯 **主要活动与分布**\n----------------------------------------\n"
         
         if top_tools:
-            text += "🛠️  **主要工具**:\n"
+            text += "🛠️  **主要数据来源/工具**:\n"
             for tool in top_tools:
                 name = tool.get("tool_name", "未知")
                 count = tool.get("count", 0)
                 duration = tool.get("total_duration_hours", 0)
-                text += f"  • {name}: {count}次 ({duration:.1f}小时)\n"
+                duration_text = f"，{duration:.1f}小时" if duration else ""
+                text += f"  • {name}: {count} 项{duration_text}\n"
         
         if top_categories:
-            text += "\n🏷️  **主要分类**:\n"
+            text += "\n🏷️  **主要工作分类**:\n"
             for category in top_categories:
                 name = category.get("category_name", "未知")
                 count = category.get("count", 0)
-                text += f"  • {name}: {count}个工作项\n"
+                text += f"  • {name}: {count} 个工作项\n"
         
-        return text
+        if priority_analysis.get("distribution"):
+            text += "\n🚦 **优先级分布**:\n"
+            for priority, count in priority_analysis["distribution"].items():
+                text += f"  • {priority}: {count} 项\n"
+        
+        duration_stats = duration_analysis.get("stats", {})
+        if duration_stats:
+            text += "\n⏳ **时长概览**:\n"
+            text += f"  • 总时长: {duration_stats.get('total_hours', 0):.1f} 小时\n"
+            text += f"  • 平均时长: {duration_stats.get('average_minutes', 0):.0f} 分钟\n"
+        
+        return text if text.strip() != "🎯 **主要活动与分布**\n----------------------------------------" else ""
     
     def _format_key_highlights(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化关键亮点（执行摘要用）"""
         overview = analysis_results.get("overview", {})
         insights = analysis_results.get("key_insights", [])
+        health_status = analysis_results.get("system_health", {})
         
         work_items = overview.get("total_work_items", 0)
         total_duration = overview.get("total_duration_hours", 0)
         completion_rate = overview.get("completion_rate_percent", 0)
         
-        text = "✨ **关键亮点**\n\n"
-        text += f"• 完成 {work_items} 个工作项，总计 {total_duration:.1f} 小时\n"
+        text = "✨ **今日工作亮点**\n----------------------------------------\n"
+        text += f"• 完成/记录 {work_items} 个工作项，总计 {total_duration:.1f} 小时\n"
         text += f"• 任务完成率: {completion_rate:.1f}%\n"
         
         if insights:
-            top_insight = insights[0] if isinstance(insights, list) else insights
-            if isinstance(top_insight, dict):
-                insight_text = top_insight.get("text", "")
-                if insight_text:
-                    text += f"• {insight_text}\n"
+            for insight in insights[:2] if isinstance(insights, list) else [insights]:
+                if isinstance(insight, dict):
+                    insight_text = insight.get("text", "")
+                    if insight_text:
+                        text += f"• {insight_text}\n"
+                elif insight:
+                    text += f"• {insight}\n"
+        
+        if health_status:
+            text += "\n🩺 **系统健康状态**:\n"
+            text += f"  • 状态: {health_status.get('status', 'normal')}\n"
+            text += f"  • 数据源成功: {health_status.get('successful_collectors', 0)} 个\n"
+            text += f"  • 数据源失败: {health_status.get('failed_collectors', 0)} 个\n"
         
         return text
     
     def _format_recommendations(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化建议（执行摘要用）"""
-        recommendations = [
-            "📅 建议：合理安排工作时间，避免集中在单一时段",
-            "🛠️  建议：多样化使用工具，提高工作效率",
-            "📊 建议：定期回顾工作记录，优化工作流程"
-        ]
+        overview = analysis_results.get("overview", {})
+        health_status = analysis_results.get("system_health", {})
+        recommendations = []
         
-        text = "💡 **优化建议**\n\n"
-        for rec in recommendations[:2]:  # 只显示2个建议
+        if overview.get("total_work_items", 0) == 0:
+            recommendations.append("📥 建议：检查数据源路径和权限，确保明日能自动采集工作记录")
+        if overview.get("completion_rate_percent", 0) < 80:
+            recommendations.append("✅ 建议：明日优先收敛未完成事项，提升任务闭环率")
+        if health_status.get("failed_collectors", 0) > 0:
+            recommendations.append("🩺 建议：优先修复失败数据源，避免日报遗漏关键信息")
+        
+        recommendations.extend([
+            "📅 建议：保持每日 19:00 自动生成日报，并在飞书中复盘重点事项",
+            "📊 建议：持续沉淀工作记录，后续可扩展周报和趋势分析"
+        ])
+        
+        text = "💡 **明日建议**\n----------------------------------------\n"
+        for rec in recommendations[:4]:
             text += f"• {rec}\n"
         
         return text

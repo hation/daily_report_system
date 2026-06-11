@@ -142,6 +142,17 @@ class ReportManager:
             if not processing_result.get("success"):
                 return self._handle_error(execution_id, "数据处理失败", processing_result.get("error"))
             
+            analysis_results = processing_result.get("analysis_results", {})
+            collection_stats = collection_result.get("stats", {})
+            analysis_results["system_health"] = {
+                "status": "normal" if collection_stats.get("failed_collectors", 0) == 0 else "partial",
+                "successful_collectors": collection_stats.get("successful_collectors", 0),
+                "failed_collectors": collection_stats.get("failed_collectors", 0),
+                "collection_time_ms": collection_stats.get("collection_time_ms", 0),
+                "processing_success": True
+            }
+            processing_result["analysis_results"] = analysis_results
+            
             # 步骤3: 格式化报告
             self.logger.info("步骤3: 格式化工作报告")
             formatting_result = self._format_report(
@@ -345,6 +356,12 @@ class ReportManager:
                 return {"success": False, "error": "未生成分析结果"}
             
             analysis_results = self._normalize_analysis_results(analysis_results)
+            analysis_results["system_health"] = {
+                "status": "normal" if processing_result.get("success") else "error",
+                "successful_collectors": 0,
+                "failed_collectors": 0,
+                "processing_success": True
+            }
             
             # 构建统计信息
             stats = {
