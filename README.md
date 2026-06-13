@@ -11,7 +11,7 @@
 - Markdown 日报生成
 - 报告本地保存到 `data/reports/`
 - 基于已授权 `lark-cli` 的飞书真实推送
-- macOS LaunchAgent 每天 19:00 自动执行
+- macOS LaunchAgent 每天 19:00 自动执行，并支持登录/每小时检查补跑
 - pytest 自动测试覆盖核心链路
 - 上线前敏感信息保护：本地配置、日志、报告、真实 plist、旧归档脚本默认忽略
 
@@ -149,6 +149,53 @@ python3 -m compileall src tests
 ```text
 19 passed
 ```
+
+## 使用手册
+
+### 日常使用
+
+正常部署后无需手动操作：系统每天 19:00 尝试生成并推送日报；如果当时电脑休眠或错过触发，登录时和每小时检查会在 19:00 后自动补跑一次。
+
+生成的报告保存在：
+
+```text
+data/reports/
+```
+
+主要日志保存在：
+
+```text
+logs/system.log
+logs/cron.log
+logs/cron_error.log
+logs/launchd.log
+logs/launchd_error.log
+```
+
+### 安装或更新定时任务
+
+修改模板或脚本后，运行安装脚本即可重新生成、卸载旧任务并加载新任务：
+
+```bash
+./scripts/install_launch_agent.sh
+```
+
+### 手动强制补发
+
+如果今天已经发过但仍要再发一次：
+
+```bash
+./scripts/run_daily_report.sh --force
+```
+
+### 防重复规则
+
+定时脚本默认最多每天成功发送一次：
+
+- 19:00 前执行：只记录检查日志并跳过
+- 19:00 后执行：如果今天没成功发过则补发
+- 今天已成功发送：直接跳过
+- `--force` 或 `FORCE_RUN_DAILY_REPORT=1`：跳过防重复检查，强制执行
 
 ## 常用命令
 
@@ -317,6 +364,13 @@ macOS LaunchAgent 使用模板生成本地真实配置：
 config/com.xingan.daily_report_system.plist.template
 ```
 
+当前触发策略：
+
+- `StartCalendarInterval`：每天 19:00 准点触发
+- `RunAtLoad`：登录或任务加载时检查一次
+- `StartInterval`：每小时检查一次
+- 脚本防重复：当天已经成功发送则跳过
+
 安装方式：
 
 ```bash
@@ -324,6 +378,8 @@ config/com.xingan.daily_report_system.plist.template
 ```
 
 部署方式见：[DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
+飞书/lark-cli 授权与排障见：[docs/lark_cli_troubleshooting.md](docs/lark_cli_troubleshooting.md)
 
 ## 上线前安全说明
 

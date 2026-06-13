@@ -29,8 +29,11 @@
         </dict>
     </array>
 
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
     <key>RunAtLoad</key>
-    <false/>
+    <true/>
 
     <key>KeepAlive</key>
     <false/>

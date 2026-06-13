@@ -7,8 +7,41 @@ LOG_DIR="$PROJECT_ROOT/logs"
 LOG_FILE="$LOG_DIR/cron.log"
 ERROR_LOG="$LOG_DIR/cron_error.log"
 LOCAL_ENV_FILE="$PROJECT_ROOT/config/local.env"
+SUCCESS_MARKER_DIR="$PROJECT_ROOT/data/cache/daily_report_success"
+TODAY="$(date '+%Y%m%d')"
+CURRENT_HOUR="$(date '+%H')"
+SUCCESS_MARKER="$SUCCESS_MARKER_DIR/$TODAY"
+FORCE_RUN="${FORCE_RUN_DAILY_REPORT:-0}"
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$SUCCESS_MARKER_DIR"
+
+if [ "${1:-}" = "--force" ]; then
+    FORCE_RUN="1"
+    shift
+fi
+
+if [ "$FORCE_RUN" != "1" ]; then
+    if [ "$CURRENT_HOUR" -lt 19 ]; then
+        {
+            echo "============================================================"
+            echo "定时任务检查时间: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "19点前跳过，等待晚间日报窗口"
+            echo "============================================================"
+        } >> "$LOG_FILE"
+        exit 0
+    fi
+
+    if [ -f "$SUCCESS_MARKER" ] || grep -q "$(date '+%Y-%m-%d').*推送状态: 成功" "$PROJECT_ROOT/logs/system.log" 2>/dev/null; then
+        {
+            echo "============================================================"
+            echo "定时任务检查时间: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "今日日报已成功发送，跳过重复执行"
+            echo "============================================================"
+        } >> "$LOG_FILE"
+        touch "$SUCCESS_MARKER"
+        exit 0
+    fi
+fi
 
 if [ -f "$LOCAL_ENV_FILE" ]; then
     set -a
@@ -64,6 +97,7 @@ EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     echo "每日工作报告执行成功" >> "$LOG_FILE"
+    touch "$SUCCESS_MARKER"
 else
     echo "每日工作报告执行失败，退出码: $EXIT_CODE" >> "$LOG_FILE"
     echo "查看错误日志: $ERROR_LOG" >> "$LOG_FILE"

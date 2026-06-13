@@ -95,7 +95,7 @@ class ReportManager:
                     "feishu_default_chat_id",
                     os.getenv("FEISHU_DEFAULT_CHAT_ID") or os.getenv("FEISHU_DAILY_REPORT_CHAT_ID") or os.getenv("LARK_DEFAULT_CHAT_ID") or os.getenv("DAILY_REPORT_CHAT_ID", "")
                 ),
-                "test_mode": self.config.get("test_mode", True),
+                "test_mode": self.config.get("test_mode", False),
                 "prefer_lark_cli": self.config.get("prefer_lark_cli", True),
                 "lark_cli_timeout": self.config.get("lark_cli_timeout", 30)
             }

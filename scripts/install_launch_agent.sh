@@ -2,9 +2,12 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TEMPLATE_PATH="$PROJECT_ROOT/config/com.xingan.daily_report_system.plist.template"
-GENERATED_PATH="$PROJECT_ROOT/config/com.xingan.daily_report_system.plist"
-TARGET_PATH="$HOME/Library/LaunchAgents/com.xingan.daily_report_system.plist"
+LABEL="com.xingan.daily_report_system"
+TEMPLATE_PATH="$PROJECT_ROOT/config/$LABEL.plist.template"
+GENERATED_PATH="$PROJECT_ROOT/config/$LABEL.plist"
+TARGET_DIR="$HOME/Library/LaunchAgents"
+TARGET_PATH="$TARGET_DIR/$LABEL.plist"
+LAUNCHCTL_DOMAIN="gui/$(id -u)"
 
 if [ ! -f "$TEMPLATE_PATH" ]; then
     echo "LaunchAgent 模板不存在: $TEMPLATE_PATH" >&2
@@ -21,7 +24,7 @@ if [ -n "$LARK_CLI_BIN" ]; then
     LAUNCHD_PATH="$LARK_CLI_BIN:$LAUNCHD_PATH"
 fi
 
-mkdir -p "$PROJECT_ROOT/logs" "$HOME/Library/LaunchAgents"
+mkdir -p "$PROJECT_ROOT/logs" "$TARGET_DIR"
 
 python3 - "$TEMPLATE_PATH" "$GENERATED_PATH" "$PROJECT_ROOT" "$LAUNCHD_PATH" <<'PY'
 import sys
@@ -34,10 +37,27 @@ content = content.replace("{{LAUNCHD_PATH}}", launchd_path)
 Path(generated_path).write_text(content, encoding="utf-8")
 PY
 
-cp "$GENERATED_PATH" "$TARGET_PATH"
-launchctl unload "$TARGET_PATH" 2>/dev/null || true
-launchctl load "$TARGET_PATH"
-launchctl list | grep daily_report_system || true
+plutil -lint "$GENERATED_PATH" >/dev/null
 
-echo "LaunchAgent 已安装: $TARGET_PATH"
-echo "每天 19:00 自动执行: $PROJECT_ROOT/scripts/run_daily_report.sh"
+if launchctl print "$LAUNCHCTL_DOMAIN/$LABEL" >/dev/null 2>&1; then
+    launchctl bootout "$LAUNCHCTL_DOMAIN/$LABEL" 2>/dev/null || launchctl unload "$TARGET_PATH" 2>/dev/null || true
+elif [ -f "$TARGET_PATH" ]; then
+    launchctl unload "$TARGET_PATH" 2>/dev/null || true
+fi
+
+cp "$GENERATED_PATH" "$TARGET_PATH"
+chmod 644 "$TARGET_PATH"
+
+if ! launchctl bootstrap "$LAUNCHCTL_DOMAIN" "$TARGET_PATH" 2>/dev/null; then
+    launchctl load "$TARGET_PATH"
+fi
+
+launchctl enable "$LAUNCHCTL_DOMAIN/$LABEL" 2>/dev/null || true
+
+if launchctl print "$LAUNCHCTL_DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl list | grep -q "$LABEL"; then
+    echo "LaunchAgent 已重新安装并加载: $TARGET_PATH"
+    echo "每天 19:00 自动执行，并在登录/每小时检查补跑: $PROJECT_ROOT/scripts/run_daily_report.sh"
+else
+    echo "LaunchAgent 安装后未检测到加载状态: $LABEL" >&2
+    exit 1
+fi

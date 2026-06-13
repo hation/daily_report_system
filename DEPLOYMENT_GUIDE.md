@@ -21,7 +21,7 @@ pip install -r requirements.txt
 lark-cli --version
 ```
 
-如授权失效，请先重新完成 lark-cli 登录授权。
+如授权失效，请先重新完成 lark-cli 登录授权。详细排障见：[docs/lark_cli_troubleshooting.md](docs/lark_cli_troubleshooting.md)。
 
 ### 3. 配置目标飞书群聊
 
@@ -89,6 +89,12 @@ python3 src/main.py --run-daily --env production
 ./scripts/run_daily_report.sh
 ```
 
+如果今天已经成功发过，但仍要手动再发一次：
+
+```bash
+./scripts/run_daily_report.sh --force
+```
+
 脚本会：
 
 1. 进入项目目录。
@@ -99,6 +105,14 @@ python3 src/main.py --run-daily --env production
 6. 写入 `logs/cron.log` 和 `logs/cron_error.log`。
 
 ## macOS LaunchAgent 定时任务
+
+当前定时策略：
+
+- 每天 19:00 准点触发一次。
+- 登录或 LaunchAgent 加载时检查一次。
+- 每小时检查一次，用于补跑错过的 19:00。
+- `scripts/run_daily_report.sh` 会防重复：同一天已经成功发送过，就跳过。
+- 如需强制发送，可使用 `./scripts/run_daily_report.sh --force`。
 
 模板文件：
 
@@ -118,11 +132,22 @@ FEISHU_DEFAULT_CHAT_ID=oc_xxx
 
 该文件已被 `.gitignore` 忽略，不会提交到仓库。注意不要把 app secret 写入仓库。当前系统优先使用已授权的 `lark-cli`，通常只需要群聊 ID。
 
-### 2. 安装 LaunchAgent
+### 2. 安装或更新 LaunchAgent
 
 ```bash
 ./scripts/install_launch_agent.sh
 ```
+
+该脚本会自动完成：
+
+1. 从模板生成真实 plist。
+2. 校验 plist 格式。
+3. 卸载旧 LaunchAgent。
+4. 复制新 plist 到 `~/Library/LaunchAgents/`。
+5. 重新加载并启用 LaunchAgent。
+6. 校验加载状态。
+
+修改模板或脚本后，重新运行该命令即可更新定时任务。
 
 ### 3. 立即触发一次
 
@@ -185,12 +210,13 @@ python3 -m compileall src tests
 ## 数据目录和日志
 
 ```text
-data/reports/backup/    # 日报备份
-logs/system.log         # 系统日志
-logs/cron.log           # 定时脚本标准日志
-logs/cron_error.log     # 定时脚本错误日志
-logs/launchd.log        # LaunchAgent 标准输出
-logs/launchd_error.log  # LaunchAgent 错误输出
+data/reports/backup/                  # 日报备份
+data/cache/daily_report_success/      # 每日成功发送标记
+logs/system.log                       # 系统日志
+logs/cron.log                         # 定时脚本标准日志
+logs/cron_error.log                   # 定时脚本错误日志
+logs/launchd.log                      # LaunchAgent 标准输出
+logs/launchd_error.log                # LaunchAgent 错误输出
 ```
 
 ## 常见问题
@@ -218,6 +244,18 @@ python3 src/main.py --test-feishu --env production --chat-id oc_xxx
 launchctl list | grep daily_report_system
 chmod +x scripts/run_daily_report.sh
 ./scripts/run_daily_report.sh
+```
+
+如果日志显示“今日日报已成功发送，跳过重复执行”，说明防重复机制生效，不是任务失败。需要强制再发时使用：
+
+```bash
+./scripts/run_daily_report.sh --force
+```
+
+如果改过模板或脚本，重新安装：
+
+```bash
+./scripts/install_launch_agent.sh
 ```
 
 ### 数据收集为空
