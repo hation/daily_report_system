@@ -149,6 +149,8 @@ class ReportManager:
                 return self._handle_error(execution_id, "数据处理失败", processing_result.get("error"))
             
             analysis_results = processing_result.get("analysis_results", {})
+            if time_range:
+                analysis_results["report_period"] = time_range
             collection_stats = collection_result.get("stats", {})
             analysis_results["system_health"] = {
                 "status": "normal" if collection_stats.get("failed_collectors", 0) == 0 else "partial",
@@ -174,7 +176,8 @@ class ReportManager:
             save_result = self._save_report(
                 formatting_result.get("report_content"),
                 execution_id,
-                report_type
+                report_type,
+                time_range
             )
             
             # 构建最终结果
@@ -462,13 +465,23 @@ class ReportManager:
             self.logger.error(f"报告格式化失败: {e}")
             return {"success": False, "error": str(e)}
     
+    def _build_report_filename(self, report_type: str, time_range: Dict[str, Any] = None) -> str:
+        if not time_range:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            return f"{report_type}_report_{timestamp}.md"
+
+        start_time = datetime.fromisoformat(time_range["start_time"])
+        end_time = datetime.fromisoformat(time_range["end_time"])
+        if start_time.time() == datetime.min.time() and end_time.time().strftime("%H:%M:%S") == "23:59:59":
+            return f"{report_type}_report_{start_time.strftime('%Y%m%d')}_{end_time.strftime('%Y%m%d')}.md"
+        return f"{report_type}_report_{start_time.strftime('%Y%m%d_%H%M%S')}_{end_time.strftime('%Y%m%d_%H%M%S')}.md"
+
     def _save_report(self, report_content: str, execution_id: str, 
-                    report_type: str) -> Dict[str, Any]:
+                    report_type: str, time_range: Dict[str, Any] = None) -> Dict[str, Any]:
         """保存报告"""
         try:
             # 生成文件名
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{report_type}_report_{timestamp}.md"
+            filename = self._build_report_filename(report_type, time_range)
             
             # 保存路径
             reports_dir = "./data/reports/"
@@ -719,12 +732,12 @@ class ReportManager:
             "checked_at": datetime.now().isoformat()
         }
     
-    def run_daily_report(self) -> Dict[str, Any]:
+    def run_daily_report(self, time_range: Dict[str, Any] = None) -> Dict[str, Any]:
         """运行每日报告"""
         self.logger.info("开始运行每日工作报告")
         
         # 生成报告
-        report_result = self.generate_report("daily")
+        report_result = self.generate_report("daily", time_range)
         
         if not report_result.get("success"):
             self.logger.error(f"每日报告生成失败: {report_result.get('error_details')}")
@@ -739,6 +752,7 @@ class ReportManager:
             "success": report_result.get("success") and push_result.get("success"),
             "execution_id": execution_id,
             "report_type": "daily",
+            "time_range": time_range,
             "report_generation": report_result,
             "report_push": push_result,
             "summary": {

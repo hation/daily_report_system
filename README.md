@@ -233,6 +233,43 @@ python3 src/main.py --run-daily --env production --chat-id oc_xxx
 python3 src/main.py --run-daily --env production
 ```
 
+### 生成固定时间范围工作总结
+
+使用快捷关键词，只生成文件、不真实推送：
+
+```bash
+python3 src/main.py --run-daily --env production --test --range 昨日
+python3 src/main.py --run-daily --env production --test --range 最近7天
+python3 src/main.py --run-daily --env production --test --range 最近一个月
+```
+
+使用明确日期范围：
+
+```bash
+python3 src/main.py --run-daily --env production --test --start 2026-06-01 --end 2026-06-07
+```
+
+指定到具体时间：
+
+```bash
+python3 src/main.py --run-daily --env production --test --start "2026-06-01 09:00:00" --end "2026-06-07 18:30:00"
+```
+
+快捷关键词：
+
+| 关键词 | 时间范围 |
+|---|---|
+| `today` / `今日` / `今天` | 今天 00:00:00 到当前时间 |
+| `yesterday` / `昨日` / `昨天` | 昨天 00:00:00 到 23:59:59 |
+| `last-7-days` / `最近7天` / `近7天` | 最近 7 个自然日，含今天 |
+| `last-30-days` / `最近30天` / `最近一个月` / `近30天` | 最近 30 个自然日，含今天 |
+
+日期简写规则：
+
+- `--start 2026-06-01` 等价于 `2026-06-01 00:00:00`
+- `--end 2026-06-07` 等价于 `2026-06-07 23:59:59`
+- `--range` 不能和 `--start/--end` 同时使用
+
 ### 通过脚本运行
 
 ```bash
@@ -262,6 +299,9 @@ python3 src/main.py --run-daily --config config/system_config.yaml --test
 | `--test-feishu` | 测试飞书连接 |
 | `--env production/development/test` | 选择运行环境 |
 | `--chat-id oc_xxx` | 指定飞书目标群，优先级最高 |
+| `--range` | 快捷时间范围，如 `今日`、`昨日`、`最近7天`、`最近一个月` |
+| `--start` | 固定时间范围开始时间，需和 `--end` 一起使用 |
+| `--end` | 固定时间范围结束时间，需和 `--start` 一起使用 |
 | `--config path` | 从指定配置文件加载配置 |
 | `--show-config` | 显示当前配置 |
 | `--save-config` | 保存当前配置到 `config/system_config.yaml` |

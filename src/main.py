@@ -45,7 +45,88 @@ def setup_logging(config):
     return logger
 
 
-def run_daily_report(config, logger, test_mode=False):
+def parse_datetime_arg(value, is_end=False):
+    """解析命令行时间参数"""
+    try:
+        if len(value) == 10:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+            if is_end:
+                return parsed.replace(hour=23, minute=59, second=59)
+            return parsed
+        return datetime.fromisoformat(value.replace(" ", "T"))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"无效时间格式: {value}") from exc
+
+
+def build_preset_time_range(range_value, now=None):
+    """根据快捷关键词构建报告时间范围"""
+    current = now or datetime.now()
+    today_start = current.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = current.replace(microsecond=0)
+    aliases = {
+        "today": "today",
+        "今日": "today",
+        "今天": "today",
+        "yesterday": "yesterday",
+        "昨日": "yesterday",
+        "昨天": "yesterday",
+        "last-7-days": "last-7-days",
+        "last7days": "last-7-days",
+        "最近7天": "last-7-days",
+        "近7天": "last-7-days",
+        "last-30-days": "last-30-days",
+        "last30days": "last-30-days",
+        "最近30天": "last-30-days",
+        "近30天": "last-30-days",
+        "最近一个月": "last-30-days",
+        "近一个月": "last-30-days",
+    }
+    normalized = aliases.get(str(range_value).strip().lower()) or aliases.get(str(range_value).strip())
+    if not normalized:
+        raise argparse.ArgumentTypeError(f"不支持的时间范围关键词: {range_value}")
+
+    if normalized == "today":
+        start_time = today_start
+        end_time = today_end
+    elif normalized == "yesterday":
+        start_time = today_start - timedelta(days=1)
+        end_time = today_start - timedelta(seconds=1)
+    elif normalized == "last-7-days":
+        start_time = today_start - timedelta(days=6)
+        end_time = today_end
+    else:
+        start_time = today_start - timedelta(days=29)
+        end_time = today_end
+
+    return {
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat()
+    }
+
+
+def build_time_range(start_value=None, end_value=None, range_value=None):
+    """构建报告时间范围"""
+    if range_value and (start_value or end_value):
+        raise argparse.ArgumentTypeError("--range 不能和 --start/--end 同时使用")
+    if range_value:
+        return build_preset_time_range(range_value)
+    if not start_value and not end_value:
+        return None
+    if not start_value or not end_value:
+        raise argparse.ArgumentTypeError("--start 和 --end 必须同时提供")
+
+    start_time = parse_datetime_arg(start_value)
+    end_time = parse_datetime_arg(end_value, is_end=True)
+    if start_time > end_time:
+        raise argparse.ArgumentTypeError("--start 不能晚于 --end")
+
+    return {
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat()
+    }
+
+
+def run_daily_report(config, logger, test_mode=False, time_range=None):
     """运行每日报告"""
     logger.info("开始运行每日工作报告")
     
@@ -90,8 +171,11 @@ def run_daily_report(config, logger, test_mode=False):
         logger.info(f"系统状态: {system_status.get('status')}")
         logger.info(f"飞书连接: {system_status.get('feishu_connection')}")
         
+        if time_range:
+            logger.info(f"报告时间范围: {time_range['start_time']} - {time_range['end_time']}")
+
         # 运行每日报告
-        result = report_manager.run_daily_report()
+        result = report_manager.run_daily_report(time_range=time_range)
         
         if result.get("success"):
             logger.info("✅ 每日工作报告运行成功")
@@ -246,10 +330,17 @@ def main():
     parser.add_argument("--test-feishu", action="store_true", help="测试飞书连接")
     parser.add_argument("--show-config", action="store_true", help="显示配置信息")
     parser.add_argument("--run-daily", action="store_true", help="运行每日报告")
+    parser.add_argument("--range", help="快捷时间范围，支持 today/今日、yesterday/昨日、last-7-days/最近7天、last-30-days/最近一个月")
+    parser.add_argument("--start", help="报告开始时间，支持 YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS")
+    parser.add_argument("--end", help="报告结束时间，支持 YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS")
     parser.add_argument("--chat-id", help="飞书目标群聊ID，优先级高于配置和环境变量")
     parser.add_argument("--save-config", action="store_true", help="保存配置到文件")
     
     args = parser.parse_args()
+    try:
+        time_range = build_time_range(args.start, args.end, args.range)
+    except argparse.ArgumentTypeError as exc:
+        parser.error(str(exc))
     
     # 加载配置
     if args.config and os.path.exists(args.config):
@@ -279,7 +370,7 @@ def main():
     
     # 运行每日报告
     if args.run_daily:
-        success = run_daily_report(config, logger, args.test)
+        success = run_daily_report(config, logger, args.test, time_range)
         sys.exit(0 if success else 1)
     
     # 显示帮助信息
@@ -289,6 +380,9 @@ def main():
         logger.info("  --test-feishu   测试飞书连接")
         logger.info("  --test          测试模式（不实际推送）")
         logger.info("  --show-config   显示配置信息")
+        logger.info("  --range         快捷时间范围 (今日/昨日/最近7天/最近一个月)")
+        logger.info("  --start         报告开始时间 (YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS)")
+        logger.info("  --end           报告结束时间 (YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS)")
         logger.info("  --chat-id       指定飞书目标群聊ID")
         logger.info("  --save-config   保存配置到文件")
         logger.info("  --env <env>     运行环境 (production/development/test)")
@@ -297,6 +391,8 @@ def main():
         logger.info("  python main.py --run-daily --test")
         logger.info("  python main.py --test-feishu --chat-id oc_xxx")
         logger.info("  python main.py --run-daily --env production --chat-id oc_xxx")
+        logger.info("  python main.py --run-daily --range 昨日 --test")
+        logger.info("  python main.py --run-daily --start 2026-06-01 --end 2026-06-07 --test")
         logger.info("  python main.py --show-config")
 
 

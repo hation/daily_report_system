@@ -133,12 +133,29 @@ class WorkReportFormatter:
     
     def _format_header(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化报告头部"""
+        period = self._format_report_period(analysis_results.get("report_period"))
+        if period:
+            title, range_text = period
+            if report_format.template == "executive":
+                return f"📊 **{title}**\n📅 报告范围：{range_text}\n"
+            return f"============================================================\n📊 **{title}**\n📅 报告范围：{range_text}\n============================================================"
+
         report_date = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-        
         if report_format.template == "executive":
             return f"📊 **工作执行摘要**\n📅 {report_date}\n"
+        return f"============================================================\n📊 **每日工作分析报告**\n📅 {report_date}\n============================================================"
+
+    def _format_report_period(self, period: Optional[Dict[str, Any]]) -> Optional[tuple]:
+        if not period:
+            return None
+        start_time = datetime.fromisoformat(period["start_time"])
+        end_time = datetime.fromisoformat(period["end_time"])
+        range_text = f"{start_time.strftime('%Y-%m-%d %H:%M:%S')} - {end_time.strftime('%Y-%m-%d %H:%M:%S')}"
+        if start_time.date() == end_time.date():
+            title = f"{start_time.strftime('%Y年%m月%d日')}工作总结"
         else:
-            return f"============================================================\n📊 **每日工作分析报告**\n📅 {report_date}\n============================================================"
+            title = f"{start_time.strftime('%Y年%m月%d日')} 至 {end_time.strftime('%Y年%m月%d日')}工作总结"
+        return title, range_text
     
     def _format_content_summary(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         content_summary = analysis_results.get("content_summary", {})
@@ -149,16 +166,21 @@ class WorkReportFormatter:
         project_groups = analysis_results.get("content_summary", {}).get("project_groups", [])
         if not project_groups:
             return ""
-        text = "🗂️ **按项目看**\n----------------------------------------\n"
+        lines = [
+            "🗂️ **按项目看**",
+            "----------------------------------------",
+            "| 项目 | 工作项 | 主要内容 |",
+            "|---|---:|---|"
+        ]
         for group in project_groups[:4]:
-            name = group.get("name", "未识别项目")
+            name = self._escape_table_cell(group.get("name", "未识别项目"))
             count = group.get("count", 0)
-            topics = "、".join(group.get("primary_topics", [])[:2]) or "工作记录"
-            text += f"• **{name}**：{count} 项，主要涉及{topics}\n"
+            titles = []
             for item in group.get("items", [])[:2]:
-                title = self._compact_text(item.get("title", "未命名工作"), 58)
-                text += f"  - {title}\n"
-        return text.rstrip()
+                titles.append(self._compact_text(item.get("title", "未命名工作"), 58))
+            topics = "；".join(titles) or "、".join(group.get("primary_topics", [])[:2]) or "工作记录"
+            lines.append(f"| {name} | {count} | {self._escape_table_cell(topics)} |")
+        return "\n".join(lines)
 
     def _format_concrete_work(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         content_summary = analysis_results.get("content_summary", {})
@@ -166,39 +188,49 @@ class WorkReportFormatter:
         activity_groups = content_summary.get("activity_groups", [])
         if not activity_groups and not human_summary_items:
             return "📝 **今天主要做了**\n----------------------------------------\n暂无可展示的具体工作事项。"
-        text = "📝 **按主题看**\n----------------------------------------\n"
+        lines = [
+            "📝 **按主题看**",
+            "----------------------------------------"
+        ]
         if human_summary_items:
+            lines.extend([
+                "| 主题 | 摘要 |",
+                "|---|---|"
+            ])
             for item in human_summary_items[:5]:
-                group = item.get("group", "工作事项")
+                group = self._escape_table_cell(item.get("group", "工作事项"))
                 summary = self._compact_text(item.get("summary", ""), 150)
-                text += f"• **{group}**：{summary}\n"
-            return text.rstrip()
-        text += "\n📌 **原始工作记录分组**\n"
-        for index, group in enumerate(activity_groups[:5], 1):
-            group_name = group.get("name", "未分类工作")
+                lines.append(f"| {group} | {self._escape_table_cell(summary)} |")
+            return "\n".join(lines)
+        lines.extend([
+            "| 主题 | 工作项 | 主要内容 |",
+            "|---|---:|---|"
+        ])
+        for group in activity_groups[:5]:
+            group_name = self._escape_table_cell(group.get("name", "未分类工作"))
             count = group.get("count", 0)
-            duration = group.get("total_duration_minutes", 0)
-            duration_text = f"，约 {duration / 60:.1f} 小时" if duration else ""
-            text += f"{index}. **{group_name}**（{count} 项{duration_text}）\n"
+            titles = []
             for item in group.get("items", [])[:4]:
-                title = self._compact_text(item.get("title", "未命名工作"), 90)
-                description = self._compact_text(item.get("description", ""), 140)
-                source = item.get("source", "unknown")
-                text += f"   • {title}（来源: {source}）\n"
-                if description and description != title:
-                    text += f"     - {description}\n"
-        return text.rstrip()
+                titles.append(self._compact_text(item.get("title", "未命名工作"), 90))
+            content = "；".join(titles) or "工作记录"
+            lines.append(f"| {group_name} | {count} | {self._escape_table_cell(content)} |")
+        return "\n".join(lines)
     
     def _format_content_key_outputs(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         outputs = analysis_results.get("content_summary", {}).get("key_outputs", [])
         if not outputs:
             return ""
-        text = "✅ **关键产出**\n----------------------------------------\n"
-        for output in outputs[:5]:
+        lines = [
+            "✅ **关键产出**",
+            "----------------------------------------",
+            "| 序号 | 产出 | 项目/来源 |",
+            "|---:|---|---|"
+        ]
+        for index, output in enumerate(outputs[:5], 1):
             summary = self._compact_text(output.get("summary") or output.get("title", ""), 90)
             project = output.get("project") or output.get("source", "unknown")
-            text += f"• {summary}（{project}）\n"
-        return text.rstrip()
+            lines.append(f"| {index} | {self._escape_table_cell(summary)} | {self._escape_table_cell(project)} |")
+        return "\n".join(lines)
     
     def _format_blockers(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         notes = analysis_results.get("content_summary", {}).get("blockers_or_notes", [])
@@ -219,6 +251,9 @@ class WorkReportFormatter:
         if len(text) > max_length:
             return text[:max_length - 1] + "…"
         return text
+
+    def _escape_table_cell(self, value: Any) -> str:
+        return str(value or "").replace("|", "\\|").replace("\n", " ").strip()
     
     def _format_overview(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         """格式化工作概览（读取 summary_statistics 或 overview）"""

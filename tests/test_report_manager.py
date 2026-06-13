@@ -5,7 +5,11 @@ from src.managers.report_manager import ReportManager
 
 
 class FakeCollectorManager:
+    def __init__(self):
+        self.time_range = None
+
     def collect_all(self, time_range):
+        self.time_range = time_range
         item_time = datetime(2026, 6, 11, 9, 0, 0)
         item = WorkItem(
             id="fake-1",
@@ -69,7 +73,8 @@ class FakeFormatter:
     report_formats = {}
 
     def format_report(self, analysis_results, format_name):
-        return f"日报: {analysis_results['overview']['total_work_items']} 个工作项"
+        period = analysis_results.get("report_period", {})
+        return f"日报: {analysis_results['overview']['total_work_items']} 个工作项 {period.get('start_time', '')}"
 
 
 class FakePusher:
@@ -99,3 +104,43 @@ def test_report_manager_generates_and_pushes_report(tmp_path):
     assert result["summary"]["work_items_analyzed"] == 1
     assert len(manager.report_history) == 1
     assert manager.report_history[0]["push_records"][0]["result"]["success"] is True
+
+
+def test_report_manager_runs_daily_report_with_time_range(tmp_path):
+    manager = ReportManager({
+        "backup_path": str(tmp_path),
+        "report_types": {
+            "daily": {
+                "format": "daily_work_summary",
+                "target": {"receive_type": "chat", "chat_id": ""},
+            }
+        },
+        "test_mode": True,
+    })
+    collector = FakeCollectorManager()
+    manager.collector_manager = collector
+    manager.processor_manager = FakeProcessorManager()
+    manager.report_formatter = FakeFormatter()
+    manager.feishu_pusher = FakePusher()
+    time_range = {
+        "start_time": "2026-06-01T00:00:00",
+        "end_time": "2026-06-07T23:59:59",
+    }
+
+    result = manager.run_daily_report(time_range=time_range)
+
+    assert result["success"] is True
+    assert result["time_range"] == time_range
+    assert collector.time_range == time_range
+    assert result["report_generation"]["save_result"]["filename"] == "daily_report_20260601_20260607.md"
+    assert "2026-06-01T00:00:00" in result["report_generation"]["report_content"]
+
+
+def test_report_manager_builds_timestamped_range_filename():
+    manager = ReportManager({})
+    filename = manager._build_report_filename("daily", {
+        "start_time": "2026-06-01T09:00:00",
+        "end_time": "2026-06-07T18:30:00",
+    })
+
+    assert filename == "daily_report_20260601_090000_20260607_183000.md"
