@@ -180,7 +180,7 @@ class WorkReportFormatter:
                 titles.append(self._compact_text(item.get("title", "未命名工作"), 58))
             topics = "；".join(titles) or "、".join(group.get("primary_topics", [])[:2]) or "工作记录"
             lines.append(f"| {name} | {count} | {self._escape_table_cell(topics)} |")
-        return "\n\n".join(lines)
+        return "\n".join(lines)
 
     def _format_concrete_work(self, analysis_results: Dict[str, Any], report_format: ReportFormat) -> str:
         content_summary = analysis_results.get("content_summary", {})
