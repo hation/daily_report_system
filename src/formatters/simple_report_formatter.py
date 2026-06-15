@@ -137,13 +137,13 @@ class WorkReportFormatter:
         if period:
             title, range_text = period
             if report_format.template == "executive":
-                return f"📊 **{title}**\n📅 报告范围：{range_text}\n"
-            return f"============================================================\n📊 **{title}**\n📅 报告范围：{range_text}\n============================================================"
+                return f"📊 **{title}**\n📅 报告范围：{range_text}"
+            return f"📊 **{title}**\n📅 报告范围：{range_text}"
 
         report_date = datetime.now().strftime("%Y年%m月%d日 %H:%M")
         if report_format.template == "executive":
-            return f"📊 **工作执行摘要**\n📅 {report_date}\n"
-        return f"============================================================\n📊 **每日工作分析报告**\n📅 {report_date}\n============================================================"
+            return f"📊 **工作执行摘要**\n📅 {report_date}"
+        return f"📊 **每日工作分析报告**\n📅 {report_date}"
 
     def _format_report_period(self, period: Optional[Dict[str, Any]]) -> Optional[tuple]:
         if not period:
@@ -462,9 +462,9 @@ class WorkReportFormatter:
         report_date = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         if report_format.template == "executive":
-            return f"\n---\n📅 报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            return f"\n---\n📅 报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         else:
-            return f"\n============================================================\n📊 报告生成完成 | 统一工作记录系统\n📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n============================================================"
+            return f"\n---\n📊 统一工作记录系统 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     
     def get_available_formats(self) -> List[Dict[str, Any]]:
         """获取可用的报告格式"""

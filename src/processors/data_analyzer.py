@@ -387,8 +387,18 @@ class DataAnalyzer(BaseProcessor):
         normalized_items = []
         for index, item in enumerate(items):
             source_processed = work_items[index] if index < len(work_items) else None
-            title = self._clean_content_text(item.get('title') or item.get('summary') or item.get('content') or '')
+            original_title = self._clean_content_text(item.get('title') or item.get('summary') or item.get('content') or '')
             description = self._clean_content_text(item.get('description') or item.get('content') or '')
+            
+            # 尝试从对话式内容中提取工作目的
+            transformed_title = self._extract_work_purpose(original_title, description)
+            
+            # 如果能提取到工作目的，使用转换后的标题
+            if transformed_title:
+                title = transformed_title
+            else:
+                title = original_title
+            
             if not title and description:
                 title = description[:80]
             if not title:
@@ -544,6 +554,9 @@ class DataAnalyzer(BaseProcessor):
     
     def _is_content_noise(self, title: str, description: str) -> bool:
         text = f"{title} {description}".lower()
+        title_lower = title.lower()
+        
+        # 过滤系统噪音
         noise_markers = [
             "context compaction",
             "reference only",
@@ -557,9 +570,90 @@ class DataAnalyzer(BaseProcessor):
         ]
         if any(marker in text for marker in noise_markers):
             return True
+        
+        # 过滤太短的标题（只有数字和符号）
         if len(title) <= 10 and any(char.isdigit() for char in title) and "-" in title:
             return True
+        
+        # 纯粹的确认类内容（没有实际工作目的）
+        pure_confirmation = [
+            "确认信息",
+            "确认配置",
+            "确认部署",
+            "确认任务",
+            "确认完成",
+            "确认进度",
+            "确认状态"
+        ]
+        if title_lower in [s.lower() for s in pure_confirmation]:
+            return True
+        
         return False
+    
+    def _extract_work_purpose(self, title: str, description: str) -> Optional[str]:
+        """
+        从对话式内容中提取实际工作目的
+        如果能提取到有意义的工作目的，返回转换后的标题；否则返回None
+        """
+        title_lower = title.lower()
+        
+        # 定义对话模式到工作目的的转换规则
+        transform_rules = [
+            # (匹配模式, 转换前缀)
+            ("用户询问", "排查"),
+            ("询问", "了解"),
+            ("问你", "了解"),
+            ("你能", "尝试"),
+            ("你可以", "尝试"),
+            ("是否可以", "评估"),
+            ("是否能", "评估"),
+            ("为什么", "分析"),
+            ("为什么不", "分析"),
+            ("为何", "分析"),
+            ("怎么", "研究"),
+            ("怎么不", "研究"),
+            ("怎么样", "评估"),
+            ("什么是", "学习"),
+            ("什么叫", "学习"),
+            ("能否", "评估"),
+            ("是否", "确认"),
+            ("有没有", "查找"),
+            ("有什么", "梳理"),
+            ("需要", "规划"),
+            ("能不能", "评估"),
+            ("可以不", "评估"),
+            ("应该", "评估"),
+            ("不应该", "评估"),
+            ("是否应该", "评估"),
+        ]
+        
+        # 尝试提取工作目的
+        for pattern, prefix in transform_rules:
+            if title_lower.startswith(pattern):
+                # 提取模式后面的内容作为工作内容
+                purpose = title[len(pattern):].strip()
+                if purpose:
+                    # 清理结尾的疑问词
+                    purpose = purpose.rstrip("？").rstrip("?").rstrip("。").rstrip(".")
+                    return f"{prefix}{purpose}"
+        
+        # 简单命令转换
+        simple_action_map = {
+            "继续之前的任务": "继续执行任务",
+            "执行命令": "执行系统命令",
+            "帮助推送代码": "协助代码推送",
+            "将代码推送到线上": "代码推送上线",
+            "用户表示要尝试执行某项操作": "准备执行操作",
+            "用户表示先开始操作": "启动任务执行",
+            "开始操作": "启动任务执行",
+            "开始工作": "启动工作项",
+            "开始任务": "启动任务",
+        }
+        
+        if title_lower in simple_action_map:
+            return simple_action_map[title_lower]
+        
+        return None
     
     def _infer_activity_group(self, item: Dict[str, Any]) -> str:
         text = f"{item.get('title', '')} {item.get('description', '')}".lower()
