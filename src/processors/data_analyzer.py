@@ -745,8 +745,8 @@ class DataAnalyzer(BaseProcessor):
         if 'hermes记忆系统健康检查' in title.lower() or 'hermes' == title.lower():
             return "检查 Hermes 记忆系统运行状态"
         if title:
-            return self._compact_sentence(title, 70)
-        return self._compact_sentence(description, 70)
+            return self._compact_sentence(title, 250)
+        return self._compact_sentence(description, 250)
 
     def _normalize_human_sentence(self, value: Any) -> str:
         text = self._clean_content_text(value)
@@ -778,7 +778,7 @@ class DataAnalyzer(BaseProcessor):
 
     def _compact_text_for_summary(self, text: str) -> str:
         text = ' '.join(str(text or '').split())
-        return text[:60]
+        return text[:100]
 
     def _merge_group_summary(self, group_name: str, item_summaries: List[str], total_count: int = 0) -> str:
         cleaned = [self._compact_sentence(s.strip().rstrip('。.'), 64) for s in item_summaries if s and s.strip()]
@@ -821,7 +821,7 @@ class DataAnalyzer(BaseProcessor):
                 seen_titles.add(dedup_key)
                 outputs.append({
                     "title": item.get('title', ''),
-                    "summary": self._compact_sentence(summary or item.get('title', ''), 90),
+                    "summary": self._compact_sentence(summary or item.get('title', ''), 250),
                     "source": item.get('source', 'unknown'),
                     "project": item.get('project', '未识别项目'),
                     "description": self._normalize_human_sentence(item.get('description', ''))[:120],
@@ -917,7 +917,7 @@ class DataAnalyzer(BaseProcessor):
                     output_parts.append(f"{output_labels[output_type]} {count} 项")
             strongest_output = max(key_outputs, key=lambda output: output.get('significance', 0))
             strongest_summary = strongest_output.get('summary') or strongest_output.get('title', '')
-            detail_text = f"，代表事项是{self._compact_sentence(strongest_summary, 48)}" if strongest_summary else ""
+            detail_text = f"，代表事项是{self._compact_sentence(strongest_summary, 250)}" if strongest_summary else ""
             type_text = f"（{ '，'.join(output_parts) }）" if output_parts else ""
             summary += f" 形成了 {len(key_outputs)} 项可识别产出{type_text}{detail_text}。"
         if blockers_or_notes:

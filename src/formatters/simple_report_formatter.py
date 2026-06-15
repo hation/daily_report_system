@@ -227,7 +227,7 @@ class WorkReportFormatter:
             "|---:|---|---|"
         ]
         for index, output in enumerate(outputs[:5], 1):
-            summary = self._compact_text(output.get("summary") or output.get("title", ""), 90)
+            summary = self._compact_text(output.get("summary") or output.get("title", ""), 250)
             project = output.get("project") or output.get("source", "unknown")
             lines.append(f"| {index} | {self._escape_table_cell(summary)} | {self._escape_table_cell(project)} |")
         return "\n".join(lines)
