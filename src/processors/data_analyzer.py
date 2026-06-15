@@ -918,7 +918,7 @@ class DataAnalyzer(BaseProcessor):
             strongest_output = max(key_outputs, key=lambda output: output.get('significance', 0))
             strongest_summary = strongest_output.get('summary') or strongest_output.get('title', '')
             detail_text = f"，代表事项是{self._compact_sentence(strongest_summary, 250)}" if strongest_summary else ""
-            type_text = f"（{ '，'.join(output_parts) }）" if output_parts else ""
+            type_text = f"（{','.join(output_parts)}）" if output_parts else ""
             summary += f" 形成了 {len(key_outputs)} 项可识别产出{type_text}{detail_text}。"
         if blockers_or_notes:
             top_note = blockers_or_notes[0].get('title', '') if blockers_or_notes else ''
