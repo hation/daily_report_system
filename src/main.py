@@ -180,18 +180,40 @@ def run_daily_report(config, logger, test_mode=False, time_range=None):
         if result.get("success"):
             logger.info("✅ 每日工作报告运行成功")
             
-            # 显示执行摘要
-            summary = result.get("summary", {})
-            logger.info(f"分析工作项: {summary.get('work_items_analyzed', 0)} 个")
-            logger.info(f"报告长度: {summary.get('report_content_length', 0)} 字符")
-            logger.info(f"推送状态: {'成功' if summary.get('push_success') else '失败'}")
-            logger.info(f"执行时间: {summary.get('total_execution_time', 0):.1f} 秒")
+            # 显示简要总结（遵循项目规则：聊天框精简版）
+            collection_stats = result.get("collection_stats", {})
+            processing_stats = result.get("processing_stats", {})
+            analysis_results = result.get("analysis_results", {})
             
-            # 显示报告历史
-            report_history = report_manager.get_report_history(limit=3)
+            logger.info("💡 今日工作简要总结")
+            logger.info("------------------")
+            
+            # 获取分析结果中的关键信息
+            content_summary = analysis_results.get("content_summary", {})
+            daily_summary = content_summary.get("daily_summary", "今日没有收集到可分析的具体工作内容。")
+            
+            # 显示一句话结论
+            logger.info(f"📝 {daily_summary}")
+            
+            # 显示关键产出（最多5条）
+            key_outputs = content_summary.get("key_outputs", [])
+            if key_outputs:
+                logger.info("\n✅ 关键产出")
+                logger.info("-----------")
+                for i, output in enumerate(key_outputs[:5], 1):
+                    summary_text = output.get("summary", output.get("title", "未命名产出"))
+                    project = output.get("project", "未识别项目")
+                    logger.info(f"{i}. {summary_text} ({project})")
+            
+            # 显示报告文件路径（让用户能够访问）
+            report_history = report_manager.get_report_history(limit=1)
             if report_history:
                 latest_report = report_history[-1]
-                logger.info(f"最新报告: {latest_report.get('filename')}")
+                # 显示 Trae 可直接点击的格式
+                import os
+                absolute_path = os.path.abspath(latest_report.get('filepath'))
+                filename = os.path.basename(latest_report.get('filepath'))
+                logger.info(f"\n📄 详细报告: [{filename}](file://{absolute_path})")
             
             return True
         else:

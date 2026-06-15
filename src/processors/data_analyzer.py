@@ -521,15 +521,42 @@ class DataAnalyzer(BaseProcessor):
         text = f"{item.get('title', '')} {item.get('description', '')}".lower()
         keywords_zh = [w for w in item.get('keywords', []) or [] if any('\u4e00' <= char <= '\u9fff' for char in w)]
         topic_rules = [
-            ("日报系统与报告优化", ["日报", "report", "daily", "报告", "飞书", "lark", "feishu", "推送", "消息", "推送失败", "飞书消息"]),
-            ("代码开发与问题修复", ["修复", "fix", "实现", "开发", "代码", "test", "测试", "pytest", "lint", "调试", "bug", "重构", "实现", "实现了"]),
-            ("文档与项目整理", ["readme", "文档", "部署", "归档", "archive", "脚本", "script", "整理", "目录", "markdown", "md"]),
-            ("数据源与采集", ["trae", "hermes", "openclaw", "collector", "收集", "采集", "数据源", "数据来源", "记忆"]),
-            ("需求沟通与方案设计", ["需求", "方案", "设计", "讨论", "计划", "优化方向", "思路", "评审"])
+            {
+                "name": "日报系统与报告优化",
+                "keywords": ["日报", "daily report", "daily_report", "报告", "飞书", "lark", "feishu", "推送", "消息", "飞书消息", "report_formatter", "data_analyzer"],
+                "negative_keywords": ["周报", "月报", "不是日报", "非日报", "与日报无关", "报告无关"]
+            },
+            {
+                "name": "技术学习与研究",
+                "keywords": ["学习", "研究", "调研", "资料", "教程", "课程", "论文", "源码阅读", "原理", "机制", "技术选型", "方案对比", "benchmark", "best practice", "api docs", "documentation", "how to", "what is"],
+                "negative_keywords": ["修复", "fix", "bug", "提交", "部署", "上线", "发布", "合并", "测试通过", "验证通过", "实现了", "已实现", "已完成"]
+            },
+            {
+                "name": "代码开发与问题修复",
+                "keywords": ["修复", "fix", "实现", "开发", "代码", "test", "测试", "pytest", "lint", "调试", "debug", "bug", "重构", "compile", "compileall", "单测", "接口", "函数"],
+                "negative_keywords": ["学习", "教程", "资料", "技术调研", "方案调研", "源码阅读", "只是了解", "只读"]
+            },
+            {
+                "name": "文档与项目整理",
+                "keywords": ["readme", "文档", "部署文档", "归档", "archive", "脚本", "script", "整理", "目录", "markdown", "md", "说明", "清单"],
+                "negative_keywords": ["文档报错", "文档测试失败", "api docs", "documentation"]
+            },
+            {
+                "name": "数据源与采集",
+                "keywords": ["trae", "hermes", "openclaw", "collector", "收集", "采集", "数据源", "数据来源", "记忆", "同步", "ingest"],
+                "negative_keywords": ["学习", "研究", "调研", "教程"]
+            },
+            {
+                "name": "需求沟通与方案设计",
+                "keywords": ["需求", "方案", "设计", "讨论", "计划", "优化方向", "思路", "评审", "对齐", "确认边界", "排期"],
+                "negative_keywords": ["测试通过", "验证通过", "已实现", "已修复", "发布上线"]
+            }
         ]
-        for group_name, keywords in topic_rules:
-            if any(keyword in text for keyword in keywords):
-                return group_name
+        for rule in topic_rules:
+            keywords = rule.get("keywords", [])
+            negative_keywords = rule.get("negative_keywords", [])
+            if any(keyword in text for keyword in keywords) and not any(keyword in text for keyword in negative_keywords):
+                return rule["name"]
         category = str(item.get('category') or item.get('source') or '')
         category_mapping = {
             "memory": "记忆与项目上下文",
@@ -537,7 +564,9 @@ class DataAnalyzer(BaseProcessor):
             "health_check": "系统健康检查",
             "file_activity": "项目文件活动",
             "ai_session": "AI 编程会话",
-            "development": "代码开发与问题修复"
+            "development": "代码开发与问题修复",
+            "learning": "技术学习与研究",
+            "research": "技术学习与研究"
         }
         if category in category_mapping:
             return category_mapping[category]
@@ -775,10 +804,16 @@ class DataAnalyzer(BaseProcessor):
     def _extract_key_outputs(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         outputs = []
         seen_titles = set()
-        output_keywords = ["完成", "实现", "修复", "提交", "生成", "新增", "更新", "归档", "验证", "通过", "success", "fix", "add", "update", "部署"]
+        output_keyword_groups = {
+            "output": ["完成", "实现", "修复", "提交", "生成", "新增", "更新", "归档", "部署", "发布", "上线", "交付", "合并", "验证通过", "测试通过", "产出", "落地", "completed", "fixed", "added", "updated", "merged", "released", "deployed", "success"],
+            "decision": ["决定", "确认", "明确", "敲定", "选定", "采用", "不采用", "批准", "定稿", "评审通过", "达成一致", "decision", "decided", "confirmed", "approved"],
+            "progress": ["推进", "进行", "梳理", "分析", "排查", "定位", "验证", "测试", "整理", "补充", "优化", "迭代", "研究", "调研", "review", "debug", "investigate", "progress"]
+        }
         for item in items:
             text = f"{item.get('title', '')} {item.get('description', '')}".lower()
-            if item.get('priority') == 'high' or any(keyword in text for keyword in output_keywords):
+            output_type, matched_keywords = self._classify_output_type(text, output_keyword_groups)
+            significance = self._score_output_significance(item, output_type, matched_keywords)
+            if item.get('priority') == 'high' or output_type or significance >= 0.62:
                 summary = self._summarize_item_for_human(item)
                 dedup_key = (summary or item.get('title', ''))[:40]
                 if dedup_key in seen_titles:
@@ -789,25 +824,64 @@ class DataAnalyzer(BaseProcessor):
                     "summary": self._compact_sentence(summary or item.get('title', ''), 90),
                     "source": item.get('source', 'unknown'),
                     "project": item.get('project', '未识别项目'),
-                    "description": self._normalize_human_sentence(item.get('description', ''))[:120]
+                    "description": self._normalize_human_sentence(item.get('description', ''))[:120],
+                    "output_type": output_type or "progress",
+                    "significance": significance
                 })
+        outputs.sort(key=lambda output: output.get('significance', 0), reverse=True)
         return outputs
+
+    def _classify_output_type(self, text: str, keyword_groups: Dict[str, List[str]]) -> Tuple[Optional[str], List[str]]:
+        matched_by_type = {
+            output_type: [keyword for keyword in keywords if keyword in text]
+            for output_type, keywords in keyword_groups.items()
+        }
+        priority_order = ["decision", "output", "progress"]
+        for output_type in priority_order:
+            if matched_by_type.get(output_type):
+                return output_type, matched_by_type[output_type]
+        return None, []
+
+    def _score_output_significance(self, item: Dict[str, Any], output_type: Optional[str], matched_keywords: List[str]) -> float:
+        score = float(item.get('importance_score', 0.5) or 0.5) * 0.45
+        priority = item.get('priority')
+        if priority == 'high':
+            score += 0.18
+        elif priority == 'medium':
+            score += 0.08
+        status = str(item.get('status', '')).lower()
+        if status in ('completed', 'done', 'closed', 'resolved', 'success', 'succeeded'):
+            score += 0.12
+        type_weights = {"decision": 0.2, "output": 0.22, "progress": 0.12}
+        score += type_weights.get(output_type or '', 0)
+        score += min(len(matched_keywords), 4) * 0.035
+        duration = float(item.get('duration_minutes', 0) or 0)
+        if duration >= 120:
+            score += 0.08
+        elif duration >= 45:
+            score += 0.04
+        if item.get('project') and item.get('project') != '未识别项目':
+            score += 0.04
+        return round(max(0.0, min(score, 1.0)), 2)
 
     def _extract_blockers_or_notes(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         notes = []
-        note_keywords = ["失败", "错误", "阻塞", "问题", "无法", "没有", "为空", "failed", "error", "missing", "not found"]
+        note_keywords = ["失败", "错误", "报错", "异常", "阻塞", "卡住", "风险", "问题", "无法", "不能", "超时", "为空", "缺失", "缺少", "不存在", "未找到", "待确认", "待处理", "failed", "failure", "error", "blocked", "missing", "not found", "timeout", "cannot"]
+        exclude_keywords = ["已完成", "完成修复", "修复完成", "已修复", "已解决", "解决完成", "问题解决", "没有问题", "未发现问题", "无需处理", "不再阻塞", "验证通过", "测试通过", "成功", "通过", "resolved", "fixed", "passed", "success", "completed"]
+        done_statuses = {'completed', 'done', 'closed', 'resolved', 'success', 'succeeded', 'passed', 'finished'}
+        attention_statuses = {'failed', 'failure', 'blocked', 'error', 'pending', 'todo', 'open', 'unresolved'}
         seen_titles = set()
         for item in items:
             title = self._normalize_human_sentence(item.get('title', ''))
             description = self._normalize_human_sentence(item.get('description', ''))
             text = f"{title} {description}".lower()
-            status = item.get('status', 'unknown')
-            is_blocker_keyword = any(keyword in text for keyword in note_keywords)
-            is_incomplete = status not in ('completed', 'done', 'unknown')
-            # 已完成的工作即便标题含"失败"也不再作为 blockers
-            is_done = status in ('completed', 'done')
-            if is_done:
+            status = str(item.get('status', 'unknown') or 'unknown').lower()
+            if status in done_statuses:
                 continue
+            if any(keyword in text for keyword in exclude_keywords):
+                continue
+            is_blocker_keyword = any(keyword in text for keyword in note_keywords)
+            is_incomplete = status in attention_statuses
             if is_blocker_keyword or is_incomplete:
                 dedup_key = title[:40]
                 if not dedup_key or dedup_key in seen_titles:
@@ -826,12 +900,32 @@ class DataAnalyzer(BaseProcessor):
         group_names = [group.get('name', '') for group in activity_groups[:3] if group.get('name')]
         project_groups = project_groups or []
         recognized_projects = [group.get('name') for group in project_groups if group.get('name') and group.get('name') != '未识别项目']
-        project_text = f"，覆盖 {len(recognized_projects)} 个已识别项目" if recognized_projects else ""
+        project_text = ""
+        if recognized_projects:
+            shown_projects = '、'.join(recognized_projects[:3])
+            extra_count = len(recognized_projects) - 3
+            extra_text = f"等 {len(recognized_projects)} 个已识别项目" if extra_count > 0 else f"{len(recognized_projects)} 个已识别项目"
+            project_text = f"，覆盖 {shown_projects}（{extra_text}）"
         summary = f"今日主要围绕{'、'.join(group_names)}展开工作{project_text}。"
         if key_outputs:
-            summary += f" 形成了 {len(key_outputs)} 项可识别产出。"
+            output_type_counts = Counter(output.get('output_type', 'progress') for output in key_outputs)
+            output_parts = []
+            output_labels = {"output": "交付/完成", "decision": "决策确认", "progress": "阶段推进"}
+            for output_type in ("output", "decision", "progress"):
+                count = output_type_counts.get(output_type, 0)
+                if count:
+                    output_parts.append(f"{output_labels[output_type]} {count} 项")
+            strongest_output = max(key_outputs, key=lambda output: output.get('significance', 0))
+            strongest_summary = strongest_output.get('summary') or strongest_output.get('title', '')
+            detail_text = f"，代表事项是{self._compact_sentence(strongest_summary, 48)}" if strongest_summary else ""
+            type_text = f"（{ '，'.join(output_parts) }）" if output_parts else ""
+            summary += f" 形成了 {len(key_outputs)} 项可识别产出{type_text}{detail_text}。"
         if blockers_or_notes:
-            summary += f" 另有 {len(blockers_or_notes)} 条事项需要后续关注。"
+            top_note = blockers_or_notes[0].get('title', '') if blockers_or_notes else ''
+            note_detail = f"，优先关注{self._compact_sentence(top_note, 42)}" if top_note else ""
+            summary += f" 另有 {len(blockers_or_notes)} 条事项需要后续关注{note_detail}。"
+        elif key_outputs:
+            summary += " 暂未识别到明确阻塞事项。"
         return summary
     
     def _generate_insights(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:

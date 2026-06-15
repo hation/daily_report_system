@@ -196,6 +196,7 @@ class ReportManager:
                 "formatting_stats": formatting_result.get("stats", {}),
                 "save_result": save_result,
                 "report_content": formatting_result.get("report_content"),
+                "analysis_results": processing_result.get("analysis_results", {}),
                 "report_summary": self._generate_report_summary(
                     collection_result, processing_result, formatting_result
                 )
@@ -755,6 +756,10 @@ class ReportManager:
             "time_range": time_range,
             "report_generation": report_result,
             "report_push": push_result,
+            "analysis_results": report_result.get("analysis_results", {}),
+            "collection_stats": report_result.get("collection_stats", {}),
+            "processing_stats": report_result.get("processing_stats", {}),
+            "save_result": report_result.get("save_result", {}),
             "summary": {
                 "work_items_analyzed": report_result.get("collection_stats", {}).get("total_items", 0),
                 "report_content_length": len(report_result.get("report_content", "")),
