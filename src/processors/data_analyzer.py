@@ -16,35 +16,35 @@ from .base_processor import BaseProcessor, ProcessedWorkItem
 
 class DataAnalyzer(BaseProcessor):
     """数据分析处理器"""
-    
+
     def __init__(self, name: str = 'data_analyzer', config: Dict[str, Any] = None):
         super().__init__(name, config or {})
-        
+
         # 分析配置
         self.time_bucket_size = self.config.get('time_bucket_size', 60)  # 时间分桶大小（分钟）
         self.top_n_categories = self.config.get('top_n_categories', 10)  # 显示前N个分类
         self.top_n_keywords = self.config.get('top_n_keywords', 20)      # 显示前N个关键词
         self.min_insight_confidence = self.config.get('min_insight_confidence', 0.7)
-    
+
     def process(self, work_items: List[ProcessedWorkItem]) -> Dict[str, Any]:
         """
         分析工作项数据，生成统计报告
-        
+
         Args:
             work_items: 处理后的工作项列表
-            
+
         Returns:
             分析报告
         """
         self.logger.info(f"开始分析 {len(work_items)} 个工作项")
-        
+
         if not work_items:
             return self._generate_empty_report()
-        
+
         # 收集原始数据用于分析
         original_items = [item.original_item for item in work_items]
         cleaned_items = [item.cleaned_item for item in work_items]
-        
+
         # 执行各项分析
         analysis_results = {
             "metadata": {
@@ -57,17 +57,17 @@ class DataAnalyzer(BaseProcessor):
             "tool_analysis": self._analyze_tool_usage(cleaned_items),
             "category_analysis": self._analyze_categories(work_items),
             "priority_analysis": self._analyze_priorities(cleaned_items),
-            
+
             "duration_analysis": self._analyze_durations(cleaned_items),
             "keyword_analysis": self._analyze_keywords(work_items),
             "content_summary": self._analyze_work_content(work_items, cleaned_items),
             "insights": self._generate_insights(work_items, cleaned_items),
             "summary_statistics": self._generate_summary_statistics(work_items, cleaned_items)
         }
-        
+
         self.logger.info("分析完成")
         return analysis_results
-    
+
     def _generate_empty_report(self) -> Dict[str, Any]:
         """生成空报告"""
         return {
@@ -82,22 +82,22 @@ class DataAnalyzer(BaseProcessor):
             "tool_analysis": {"tools": {}, "total_by_tool": {}},
             "category_analysis": {"categories": {}, "distribution": {}},
             "priority_analysis": {"priorities": {}, "distribution": {}},
-            
+
             "duration_analysis": {"stats": {}, "buckets": {}},
             "keyword_analysis": {"keywords": {}, "top_keywords": []},
             "content_summary": {"daily_summary": "今日没有收集到可分析的具体工作内容。", "human_summary_items": [], "activity_groups": [], "key_outputs": [], "blockers_or_notes": []},
             "insights": {"general": [], "time_patterns": [], "tool_usage": []},
             "summary_statistics": {"overall": {}, "averages": {}, "totals": {}}
         }
-    
+
     def _get_time_range(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """获取时间范围"""
         if not items:
             return {"start": None, "end": None, "days": 0}
-        
+
         start_times = []
         end_times = []
-        
+
         for item in items:
             if 'start_time' in item and item['start_time']:
                 try:
@@ -108,7 +108,7 @@ class DataAnalyzer(BaseProcessor):
                     start_times.append(dt)
                 except:
                     pass
-            
+
             if 'end_time' in item and item['end_time']:
                 try:
                     if isinstance(item['end_time'], str):
@@ -118,15 +118,15 @@ class DataAnalyzer(BaseProcessor):
                     end_times.append(dt)
                 except:
                     pass
-        
+
         if not start_times:
             return {"start": None, "end": None, "days": 0}
-        
+
         min_start = min(start_times)
         max_end = max(end_times) if end_times else min_start
-        
+
         days = (max_end - min_start).days + 1
-        
+
         return {
             "start": min_start.isoformat(),
             "end": max_end.isoformat(),
@@ -134,13 +134,13 @@ class DataAnalyzer(BaseProcessor):
             "start_date": min_start.date().isoformat(),
             "end_date": max_end.date().isoformat()
         }
-    
+
     def _analyze_time_distribution(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """分析时间分布"""
         hourly_dist = defaultdict(int)
         daily_dist = defaultdict(int)
         weekly_dist = defaultdict(int)
-        
+
         for item in items:
             if 'start_time' in item and item['start_time']:
                 try:
@@ -148,22 +148,22 @@ class DataAnalyzer(BaseProcessor):
                         dt = datetime.fromisoformat(item['start_time'].replace('Z', '+00:00'))
                     else:
                         dt = item['start_time']
-                    
+
                     # 按小时统计
                     hour_key = f"{dt.hour:02d}:00"
                     hourly_dist[hour_key] += 1
-                    
+
                     # 按天统计
                     day_key = dt.date().isoformat()
                     daily_dist[day_key] += 1
-                    
+
                     # 按周统计
                     week_key = f"{dt.year}-W{dt.isocalendar()[1]:02d}"
                     weekly_dist[week_key] += 1
-                    
+
                 except:
                     pass
-        
+
         return {
             "hourly": dict(sorted(hourly_dist.items())),
             "daily": dict(sorted(daily_dist.items())),
@@ -174,21 +174,21 @@ class DataAnalyzer(BaseProcessor):
             "total_days_covered": len(daily_dist),
             "total_weeks_covered": len(weekly_dist)
         }
-    
+
     def _analyze_tool_usage(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """分析工具使用情况"""
         tool_counts = Counter()
         tool_durations = defaultdict(float)
         tool_categories = defaultdict(set)
-        
+
         for item in items:
             tool = item.get('tool', 'unknown')
             tool_counts[tool] += 1
-            
+
             # 统计工具使用时长
             duration = item.get('duration_minutes', 0)
             tool_durations[tool] += duration
-            
+
             # 收集工具的分类
             category = item.get('category', 'other')
             if isinstance(category, list):
@@ -196,16 +196,16 @@ class DataAnalyzer(BaseProcessor):
                     tool_categories[tool].add(cat)
             else:
                 tool_categories[tool].add(category)
-        
+
         # 计算工具使用比例
         total_items = len(items)
         total_duration = sum(tool_durations.values())
-        
+
         tool_usage = {}
         for tool, count in tool_counts.most_common():
             duration = tool_durations[tool]
             categories = list(tool_categories[tool])
-            
+
             tool_usage[tool] = {
                 "count": count,
                 "percentage": (count / total_items * 100) if total_items > 0 else 0,
@@ -215,7 +215,7 @@ class DataAnalyzer(BaseProcessor):
                 "categories": categories[:5],  # 最多显示5个分类
                 "is_primary_tool": duration > (total_duration / len(tool_counts) * 2) if tool_counts else False
             }
-        
+
         # 找出主要工具
         primary_tools = []
         if tool_usage:
@@ -223,7 +223,7 @@ class DataAnalyzer(BaseProcessor):
             for tool, stats in tool_usage.items():
                 if stats['total_duration_minutes'] >= max_duration * 0.7:  # 使用时长达到最高时长的70%
                     primary_tools.append(tool)
-        
+
         return {
             "tools": tool_usage,
             "total_by_tool": dict(tool_counts),
@@ -232,37 +232,37 @@ class DataAnalyzer(BaseProcessor):
             "longest_duration_tool": max(tool_durations.items(), key=lambda x: x[1]) if tool_durations else None,
             "tool_diversity": len(tool_counts) / total_items if total_items > 0 else 0
         }
-    
+
     def _analyze_categories(self, work_items: List[ProcessedWorkItem]) -> Dict[str, Any]:
         """分析分类分布"""
         category_counts = Counter()
         category_durations = defaultdict(float)
         category_tools = defaultdict(set)
-        
+
         for item in work_items:
             categories = item.categories
             if not categories:
                 categories = ['uncategorized']
-            
+
             for category in categories:
                 category_counts[category] += 1
-                
+
                 # 统计分类时长
                 duration = item.cleaned_item.get('duration_minutes', 0)
                 category_durations[category] += duration
-                
+
                 # 收集分类使用的工具
                 tool = item.cleaned_item.get('tool', 'unknown')
                 category_tools[category].add(tool)
-        
+
         total_items = len(work_items)
         total_duration = sum(category_durations.values())
-        
+
         category_analysis = {}
         for category, count in category_counts.most_common(self.top_n_categories):
             duration = category_durations[category]
             tools = list(category_tools[category])
-            
+
             category_analysis[category] = {
                 "count": count,
                 "percentage": (count / total_items * 100) if total_items > 0 else 0,
@@ -272,10 +272,10 @@ class DataAnalyzer(BaseProcessor):
                 "tools": tools[:5],  # 最多显示5个工具
                 "is_primary_category": count > (total_items / len(category_counts) * 2) if category_counts else False
             }
-        
+
         # 计算分类多样性
         category_diversity = len(category_counts) / total_items if total_items > 0 else 0
-        
+
         # 找出主要分类
         primary_categories = []
         if category_analysis:
@@ -283,7 +283,7 @@ class DataAnalyzer(BaseProcessor):
             for category, stats in category_analysis.items():
                 if stats['count'] >= max_count * 0.7:  # 数量达到最高数量的70%
                     primary_categories.append(category)
-        
+
         return {
             "categories": category_analysis,
             "distribution": dict(category_counts),
@@ -293,37 +293,37 @@ class DataAnalyzer(BaseProcessor):
             "category_diversity": category_diversity,
             "total_categories": len(category_counts)
         }
-    
+
     def _analyze_priorities(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """分析优先级分布"""
         priority_counts = Counter()
         priority_durations = defaultdict(float)
         priority_completion = defaultdict(lambda: {'completed': 0, 'total': 0})
-        
+
         for item in items:
             priority = item.get('priority', 'medium')
             priority_counts[priority] += 1
-            
+
             # 统计优先级时长
             duration = item.get('duration_minutes', 0)
             priority_durations[priority] += duration
-            
+
             # 统计完成情况
             status = item.get('status', 'unknown')
             if status == 'completed':
                 priority_completion[priority]['completed'] += 1
             priority_completion[priority]['total'] += 1
-        
+
         total_items = len(items)
-        
+
         priority_analysis = {}
         for priority in ['high', 'medium', 'low', 'unknown']:
             count = priority_counts[priority]
             duration = priority_durations[priority]
             completion = priority_completion[priority]
-            
+
             completion_rate = (completion['completed'] / completion['total'] * 100) if completion['total'] > 0 else 0
-            
+
             priority_analysis[priority] = {
                 "count": count,
                 "percentage": (count / total_items * 100) if total_items > 0 else 0,
@@ -333,12 +333,12 @@ class DataAnalyzer(BaseProcessor):
                 "completed_count": completion['completed'],
                 "total_count": completion['total']
             }
-        
+
         # 计算优先级效率
         high_priority_efficiency = 0
         if priority_analysis.get('high', {}).get('completion_rate', 0) > 0:
             high_priority_efficiency = priority_analysis['high']['completion_rate']
-        
+
         return {
             "priorities": priority_analysis,
             "distribution": dict(priority_counts),
@@ -348,7 +348,7 @@ class DataAnalyzer(BaseProcessor):
                 p: priority_analysis[p]['completion_rate'] for p in priority_analysis
             }
         }
-    
+
     def _analyze_durations(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """分析工作时长"""
         durations = [float(item.get('duration_minutes', 0) or 0) for item in items]
@@ -369,7 +369,7 @@ class DataAnalyzer(BaseProcessor):
             },
             "buckets": buckets
         }
-    
+
     def _analyze_keywords(self, work_items: List[ProcessedWorkItem]) -> Dict[str, Any]:
         """分析关键词"""
         keyword_counts = Counter()
@@ -380,7 +380,7 @@ class DataAnalyzer(BaseProcessor):
             for keyword, count in keyword_counts.most_common(self.top_n_keywords)
         ]
         return {"keywords": dict(keyword_counts), "top_keywords": top_keywords}
-    
+
     def _analyze_work_content(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not items:
             return {"daily_summary": "今日没有收集到可分析的具体工作内容。", "human_summary_items": [], "activity_groups": [], "key_outputs": [], "blockers_or_notes": []}
@@ -389,16 +389,16 @@ class DataAnalyzer(BaseProcessor):
             source_processed = work_items[index] if index < len(work_items) else None
             original_title = self._clean_content_text(item.get('title') or item.get('summary') or item.get('content') or '')
             description = self._clean_content_text(item.get('description') or item.get('content') or '')
-            
+
             # 尝试从对话式内容中提取工作目的
             transformed_title = self._extract_work_purpose(original_title, description)
-            
+
             # 如果能提取到工作目的，使用转换后的标题
             if transformed_title:
                 title = transformed_title
             else:
                 title = original_title
-            
+
             if not title and description:
                 title = description[:80]
             if not title:
@@ -575,16 +575,16 @@ class DataAnalyzer(BaseProcessor):
             return best if len(best) >= 2 else '其他工作'
         display = category.replace('_', ' ').title() if category and category.isascii() else category
         return display or '其他工作'
-    
+
     def _clean_content_text(self, value: Any) -> str:
         text = str(value or '').strip()
         text = ' '.join(text.split())
         return text[:300]
-    
+
     def _is_content_noise(self, title: str, description: str) -> bool:
         text = f"{title} {description}".lower()
         title_lower = title.lower()
-        
+
         # 过滤系统噪音
         noise_markers = [
             "context compaction",
@@ -599,11 +599,11 @@ class DataAnalyzer(BaseProcessor):
         ]
         if any(marker in text for marker in noise_markers):
             return True
-        
+
         # 过滤太短的标题（只有数字和符号）
         if len(title) <= 10 and any(char.isdigit() for char in title) and "-" in title:
             return True
-        
+
         # 纯粹的确认类内容（没有实际工作目的）
         pure_confirmation = [
             "确认信息",
@@ -616,16 +616,16 @@ class DataAnalyzer(BaseProcessor):
         ]
         if title_lower in [s.lower() for s in pure_confirmation]:
             return True
-        
+
         return False
-    
+
     def _extract_work_purpose(self, title: str, description: str) -> Optional[str]:
         """
         从对话式内容中提取实际工作目的
         如果能提取到有意义的工作目的，返回转换后的标题；否则返回None
         """
         title_lower = title.lower()
-        
+
         # 定义对话模式到工作目的的转换规则
         transform_rules = [
             # (匹配模式, 转换前缀)
@@ -655,7 +655,7 @@ class DataAnalyzer(BaseProcessor):
             ("不应该", "评估"),
             ("是否应该", "评估"),
         ]
-        
+
         # 尝试提取工作目的
         for pattern, prefix in transform_rules:
             if title_lower.startswith(pattern):
@@ -665,7 +665,7 @@ class DataAnalyzer(BaseProcessor):
                     # 清理结尾的疑问词
                     purpose = purpose.rstrip("？").rstrip("?").rstrip("。").rstrip(".")
                     return f"{prefix}{purpose}"
-        
+
         # 简单命令转换
         simple_action_map = {
             "继续之前的任务": "继续执行任务",
@@ -678,12 +678,12 @@ class DataAnalyzer(BaseProcessor):
             "开始工作": "启动工作项",
             "开始任务": "启动任务",
         }
-        
+
         if title_lower in simple_action_map:
             return simple_action_map[title_lower]
-        
+
         return None
-    
+
     def _infer_activity_group(self, item: Dict[str, Any]) -> str:
         text = f"{item.get('title', '')} {item.get('description', '')}".lower()
         rules = [
@@ -708,7 +708,7 @@ class DataAnalyzer(BaseProcessor):
         if category in category_mapping:
             return category_mapping[category]
         return category.replace('_', ' ').title() if category.isascii() else category
-    
+
     def _build_human_summary_items(self, activity_groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         summary_items = []
         for group in activity_groups[:6]:
@@ -745,8 +745,17 @@ class DataAnalyzer(BaseProcessor):
         if 'hermes记忆系统健康检查' in title.lower() or 'hermes' == title.lower():
             return "检查 Hermes 记忆系统运行状态"
         if title:
+            compact_title = ''.join(title.split())
+            if len(compact_title) <= 2 and description:
+                return self._derive_summary_from_description(description)
             return self._compact_sentence(title, 250)
         return self._compact_sentence(description, 250)
+
+    def _derive_summary_from_description(self, description: str) -> str:
+        parts = [part.strip() for part in description.replace('；', '、').split('、') if part.strip()]
+        if parts:
+            return self._compact_sentence('、'.join(parts[:2]), 120)
+        return self._compact_sentence(description, 120)
 
     def _normalize_human_sentence(self, value: Any) -> str:
         text = self._clean_content_text(value)
@@ -815,6 +824,9 @@ class DataAnalyzer(BaseProcessor):
             significance = self._score_output_significance(item, output_type, matched_keywords)
             if item.get('priority') == 'high' or output_type or significance >= 0.62:
                 summary = self._summarize_item_for_human(item)
+                description = self._normalize_human_sentence(item.get('description', ''))
+                if self._is_low_information_summary(summary, description):
+                    continue
                 dedup_key = (summary or item.get('title', ''))[:40]
                 if dedup_key in seen_titles:
                     continue
@@ -830,6 +842,16 @@ class DataAnalyzer(BaseProcessor):
                 })
         outputs.sort(key=lambda output: output.get('significance', 0), reverse=True)
         return outputs
+
+    def _is_low_information_summary(self, summary: str, description: str = "") -> bool:
+        text = f"{summary or ''} {description or ''}".strip()
+        compact = ''.join(text.split())
+        if len(compact) <= 1:
+            return True
+        if len(compact) <= 2 and compact.isascii():
+            return True
+        low_value_summaries = {"相关工作", "工作记录", "项目分析", "分析模式", "修改模式"}
+        return str(summary or '').strip() in low_value_summaries and not str(description or '').strip()
 
     def _classify_output_type(self, text: str, keyword_groups: Dict[str, List[str]]) -> Tuple[Optional[str], List[str]]:
         matched_by_type = {
@@ -895,39 +917,264 @@ class DataAnalyzer(BaseProcessor):
         return notes
 
     def _build_daily_summary(self, activity_groups: List[Dict[str, Any]], key_outputs: List[Dict[str, Any]], blockers_or_notes: List[Dict[str, Any]], project_groups: List[Dict[str, Any]] = None) -> str:
+        """生成自然语言描述的每日工作总结"""
         if not activity_groups:
             return "今日没有收集到可分析的具体工作内容。"
-        group_names = [group.get('name', '') for group in activity_groups[:3] if group.get('name')]
-        project_groups = project_groups or []
-        recognized_projects = [group.get('name') for group in project_groups if group.get('name') and group.get('name') != '未识别项目']
-        project_text = ""
-        if recognized_projects:
-            shown_projects = '、'.join(recognized_projects[:3])
-            extra_count = len(recognized_projects) - 3
-            extra_text = f"等 {len(recognized_projects)} 个已识别项目" if extra_count > 0 else f"{len(recognized_projects)} 个已识别项目"
-            project_text = f"，覆盖 {shown_projects}（{extra_text}）"
-        summary = f"今日主要围绕{'、'.join(group_names)}展开工作{project_text}。"
-        if key_outputs:
-            output_type_counts = Counter(output.get('output_type', 'progress') for output in key_outputs)
-            output_parts = []
-            output_labels = {"output": "交付/完成", "decision": "决策确认", "progress": "阶段推进"}
-            for output_type in ("output", "decision", "progress"):
-                count = output_type_counts.get(output_type, 0)
-                if count:
-                    output_parts.append(f"{output_labels[output_type]} {count} 项")
-            strongest_output = max(key_outputs, key=lambda output: output.get('significance', 0))
-            strongest_summary = strongest_output.get('summary') or strongest_output.get('title', '')
-            detail_text = f"，代表事项是{self._compact_sentence(strongest_summary, 250)}" if strongest_summary else ""
-            type_text = f"（{','.join(output_parts)}）" if output_parts else ""
-            summary += f" 形成了 {len(key_outputs)} 项可识别产出{type_text}{detail_text}。"
-        if blockers_or_notes:
-            top_note = blockers_or_notes[0].get('title', '') if blockers_or_notes else ''
-            note_detail = f"，优先关注{self._compact_sentence(top_note, 42)}" if top_note else ""
-            summary += f" 另有 {len(blockers_or_notes)} 条事项需要后续关注{note_detail}。"
+
+        # 分析主要工作目的
+        main_purposes = self._analyze_work_purposes(activity_groups)
+
+        # 分析解决的问题
+        solved_problems = self._analyze_solved_problems(key_outputs, activity_groups)
+
+        # 分析实际进展
+        actual_progress = self._analyze_actual_progress(key_outputs)
+
+        # 分析阻塞事项
+        blockers_analysis = self._analyze_blockers(blockers_or_notes)
+
+        # 总结核心价值
+        core_value = self._summarize_core_value(activity_groups, key_outputs)
+
+        # 构建自然语言摘要
+        summary_parts = []
+
+        # 1. 主要目的和重点
+        if main_purposes:
+            summary_parts.append(f"今日工作主要{main_purposes}")
+
+        # 2. 解决的问题
+        if solved_problems:
+            summary_parts.append(f"解决了{solved_problems}")
+
+        # 3. 实际进展
+        if actual_progress:
+            summary_parts.append(f"取得了{actual_progress}")
+
+        # 4. 阻塞事项
+        if blockers_analysis:
+            summary_parts.append(f"需要注意{blockers_analysis}")
         elif key_outputs:
-            summary += " 暂未识别到明确阻塞事项。"
-        return summary
-    
+            summary_parts.append("暂未发现需要特别关注的阻塞事项")
+
+        # 5. 核心价值
+        if core_value:
+            summary_parts.append(f"整体来看，{core_value}")
+
+        # 如果没有分析出具体内容，使用备选方案
+        if not summary_parts:
+            group_names = [group.get('name', '') for group in activity_groups[:3] if group.get('name')]
+            project_text = ""
+            if project_groups:
+                recognized_projects = [group.get('name') for group in project_groups if group.get('name') and group.get('name') != '未识别项目']
+                if recognized_projects:
+                    shown_projects = '、'.join(recognized_projects[:3])
+                    extra_count = len(recognized_projects) - 3
+                    extra_text = f"等 {len(recognized_projects)} 个已识别项目" if extra_count > 0 else f"{len(recognized_projects)} 个已识别项目"
+                    project_text = f"，覆盖 {shown_projects}（{extra_text}）"
+            return f"今日主要围绕{'、'.join(group_names)}展开工作{project_text}。形成了 {len(key_outputs)} 项关键产出。"
+
+        return "。".join(summary_parts) + "。"
+
+    def _analyze_work_purposes(self, activity_groups: List[Dict[str, Any]]) -> str:
+        """分析工作目的"""
+        if not activity_groups:
+            return ""
+
+        # 主题到目的的映射
+        purpose_mapping = {
+            "代码开发与问题修复": "推进技术实现和问题解决",
+            "文档与项目整理": "整理项目文档和优化工作流程",
+            "数据源与采集": "维护数据收集和分析功能",
+            "需求沟通与方案设计": "梳理需求和规划方案",
+            "日报系统与报告优化": "优化报告生成和展示效果",
+            "系统健康检查": "检查系统运行状态",
+            "记忆与项目上下文": "更新项目记忆和上下文",
+            "项目文件活动": "处理项目文件相关工作",
+            "沟通与会话记录": "进行工作沟通和会话记录",
+            "技术学习与研究": "进行技术学习和研究"
+        }
+
+        main_groups = [group.get('name', '') for group in activity_groups[:3] if group.get('name')]
+        purposes = []
+        for group in main_groups:
+            if group in purpose_mapping:
+                purposes.append(purpose_mapping[group])
+            else:
+                purposes.append(f"处理{group}相关工作")
+
+        if len(purposes) == 1:
+            return purposes[0]
+        elif len(purposes) == 2:
+            return f"{purposes[0]}和{purposes[1]}"
+        else:
+            return f"{'、'.join(purposes[:-1])}和{purposes[-1]}"
+
+    def _analyze_solved_problems(self, key_outputs: List[Dict[str, Any]], activity_groups: List[Dict[str, Any]]) -> str:
+        """分析解决的问题"""
+        if not key_outputs:
+            return "一些基础工作"
+
+        # 从关键产出中提取解决的问题
+        problems = []
+        problem_keywords = {
+            "修复": "技术问题",
+            "解决": "运行问题",
+            "优化": "性能问题",
+            "完善": "功能缺陷",
+            "更新": "版本问题",
+            "检查": "系统问题",
+            "规划": "设计方案",
+            "实现": "功能需求",
+            "确认": "需求问题"
+        }
+
+        for output in key_outputs[:3]:  # 取最重要的3个产出
+            title = output.get('title', '')
+            summary = output.get('summary', '')
+            text = f"{title} {summary}".lower()
+
+            for keyword, problem_type in problem_keywords.items():
+                if keyword in text:
+                    # 提取具体问题描述
+                    problem_desc = self._extract_problem_description(text, keyword)
+                    problems.append(f"{problem_desc}{problem_type}")
+                    break
+
+        if not problems:
+            # 从活动组中推断
+            group_names = [group.get('name', '') for group in activity_groups[:2] if group.get('name')]
+            if group_names:
+                return f"{'、'.join(group_names)}相关的工作问题"
+            return "日常工作问题"
+
+        if len(problems) == 1:
+            return problems[0]
+        elif len(problems) == 2:
+            return f"{problems[0]}和{problems[1]}"
+        else:
+            return f"{'、'.join(problems[:-1])}和{problems[-1]}"
+
+    def _extract_problem_description(self, text: str, keyword: str) -> str:
+        """从文本中提取问题描述"""
+        # 简单的提取逻辑，可以根据需要扩展
+        if "端口" in text:
+            return "端口"
+        elif "配置" in text:
+            return "配置"
+        elif "功能" in text:
+            return "功能"
+        elif "数据" in text:
+            return "数据"
+        elif "系统" in text:
+            return "系统"
+        elif "代码" in text:
+            return "代码"
+        else:
+            return ""
+
+    def _analyze_actual_progress(self, key_outputs: List[Dict[str, Any]]) -> str:
+        """分析实际进展"""
+        if not key_outputs:
+            return "一些基础进展"
+
+        progress_types = []
+        for output in key_outputs[:3]:  # 取最重要的3个产出
+            output_type = output.get('output_type', 'progress')
+            if output_type == 'output':
+                progress_types.append("具体功能实现")
+            elif output_type == 'decision':
+                progress_types.append("重要决策确认")
+            elif output_type == 'progress':
+                progress_types.append("工作阶段推进")
+
+        if not progress_types:
+            return f"{len(key_outputs)}项工作进展"
+
+        # 去重并统计
+        type_counts = {}
+        for progress_type in progress_types:
+            type_counts[progress_type] = type_counts.get(progress_type, 0) + 1
+
+        progress_parts = []
+        for progress_type, count in type_counts.items():
+            progress_parts.append(f"{count}项{progress_type}")
+
+        if len(progress_parts) == 1:
+            return progress_parts[0]
+        elif len(progress_parts) == 2:
+            return f"{progress_parts[0]}和{progress_parts[1]}"
+        else:
+            return f"{'、'.join(progress_parts[:-1])}和{progress_parts[-1]}"
+
+    def _analyze_blockers(self, blockers_or_notes: List[Dict[str, Any]]) -> str:
+        """分析阻塞事项"""
+        if not blockers_or_notes:
+            return ""
+
+        blocker_types = []
+        blocker_keywords = {
+            "失败": "执行失败",
+            "错误": "运行错误",
+            "阻塞": "流程阻塞",
+            "问题": "技术问题",
+            "无法": "功能无法使用",
+            "缺失": "资源缺失",
+            "超时": "响应超时"
+        }
+
+        for blocker in blockers_or_notes[:2]:  # 取最重要的2个阻塞项
+            title = blocker.get('title', '').lower()
+            for keyword, blocker_type in blocker_keywords.items():
+                if keyword in title:
+                    blocker_types.append(blocker_type)
+                    break
+
+        if not blocker_types:
+            return f"{len(blockers_or_notes)}个需要关注的事项"
+
+        if len(blocker_types) == 1:
+            return f"{blocker_types[0]}的问题"
+        else:
+            return f"{'、'.join(blocker_types[:-1])}和{blocker_types[-1]}等问题"
+
+    def _summarize_core_value(self, activity_groups: List[Dict[str, Any]], key_outputs: List[Dict[str, Any]]) -> str:
+        """总结核心价值"""
+        if not activity_groups and not key_outputs:
+            return "完成了日常基础工作"
+
+        # 根据工作类型总结价值
+        value_mapping = {
+            "代码开发与问题修复": "为后续开发打下了坚实基础",
+            "文档与项目整理": "优化了工作流程和文档质量",
+            "数据源与采集": "提升了数据收集和分析能力",
+            "需求沟通与方案设计": "明确了后续工作方向",
+            "日报系统与报告优化": "改善了工作报告的质量和可读性",
+            "技术学习与研究": "积累了新的技术知识和经验"
+        }
+
+        # 优先使用活动组的价值总结
+        for group in activity_groups[:2]:
+            group_name = group.get('name', '')
+            if group_name in value_mapping:
+                return value_mapping[group_name]
+
+        # 如果没有匹配，根据产出类型总结
+        if key_outputs:
+            output_types = set()
+            for output in key_outputs[:3]:
+                output_type = output.get('output_type', 'progress')
+                output_types.add(output_type)
+
+            if 'output' in output_types:
+                return "实现了具体功能，为项目提供了实际价值"
+            elif 'decision' in output_types:
+                return "明确了关键决策，为后续工作提供了方向"
+            elif 'progress' in output_types:
+                return "推进了工作进展，为项目发展奠定了基础"
+
+        return "为项目发展提供了有力支持"
+
     def _generate_insights(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """生成基础洞察"""
         insights = []
@@ -943,7 +1190,7 @@ class DataAnalyzer(BaseProcessor):
             tool, count = tool_counts.most_common(1)[0]
             insights.append({"text": f"最常使用的数据来源是 {tool}，共 {count} 项", "confidence": 0.8})
         return {"general": insights}
-    
+
     def _generate_summary_statistics(self, work_items: List[ProcessedWorkItem], items: List[Dict[str, Any]]) -> Dict[str, Any]:
         """生成汇总统计"""
         total_items = len(items)

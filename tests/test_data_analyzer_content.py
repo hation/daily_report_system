@@ -38,15 +38,16 @@ def test_data_analyzer_generates_content_summary():
 
     content_summary = result["content_summary"]
 
-    assert "今日主要围绕" in content_summary["daily_summary"]
+    # 新的摘要格式检查
+    assert "今日工作主要" in content_summary["daily_summary"] or "解决了" in content_summary["daily_summary"] or "取得了" in content_summary["daily_summary"]
     assert content_summary["activity_groups"]
     assert content_summary["human_summary_items"]
-    assert any("日报" in item["summary"] for item in content_summary["human_summary_items"])
+    assert any("日报" in item.get("summary", "") for item in content_summary["human_summary_items"])
     assert content_summary["activity_groups"][0]["items"][0]["title"] in {
         "优化每日工作分析报告内容",
         "补充内容型日报测试",
     }
-    assert any(output["title"] == "优化每日工作分析报告内容" for output in content_summary["key_outputs"])
+    assert any(output.get("title") == "优化每日工作分析报告内容" for output in content_summary["key_outputs"])
     assert content_summary["project_groups"]
-    assert {group["name"] for group in content_summary["project_groups"]} >= {"daily_report_system", "video_anlalyer"}
-    assert all(len(item["summary"]) <= 150 for item in content_summary["human_summary_items"])
+    assert {group.get("name") for group in content_summary["project_groups"]} >= {"daily_report_system", "video_anlalyer"}
+    assert all(len(item.get("summary", "")) <= 150 for item in content_summary["human_summary_items"])

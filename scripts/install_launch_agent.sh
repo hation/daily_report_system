@@ -56,7 +56,7 @@ launchctl enable "$LAUNCHCTL_DOMAIN/$LABEL" 2>/dev/null || true
 
 if launchctl print "$LAUNCHCTL_DOMAIN/$LABEL" >/dev/null 2>&1 || launchctl list | grep -q "$LABEL"; then
     echo "LaunchAgent 已重新安装并加载: $TARGET_PATH"
-    echo "每天 19:00 自动执行，并在登录/每小时检查补跑: $PROJECT_ROOT/scripts/run_daily_report.sh"
+    echo "每天 19:00 自动执行，并在登录时检查补跑: $PROJECT_ROOT/scripts/run_daily_report.sh"
 else
     echo "LaunchAgent 安装后未检测到加载状态: $LABEL" >&2
     exit 1
